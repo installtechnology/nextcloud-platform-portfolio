@@ -1,0 +1,6 @@
+#!/bin/sh
+set -eu
+[ "$#" -eq 1 ] || exit 2
+case "$1" in lease|backup) ;; *) exit 2 ;; esac
+cd /usr/local/lib/nextcloud-recovery/repository
+exec /usr/local/lib/nextcloud-recovery/venv/bin/python -m scripts.backup.operational.host_dispatch "$1"

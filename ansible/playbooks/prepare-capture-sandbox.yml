@@ -1,0 +1,7 @@
+---
+- name: Preparar somente ferramentas para ensaio local isolado do PR3
+  hosts: capture_sandbox
+  connection: local
+  gather_facts: true
+  roles:
+    - role: recovery_capture

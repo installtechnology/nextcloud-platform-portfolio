@@ -1,0 +1,10 @@
+*.sh text eol=lf
+*.php text eol=lf
+*.yml text eol=lf
+*.j2 text eol=lf
+*.alloy text eol=lf
+*.json text eol=lf
+scripts/backup/operational/nextcloud-recovery text eol=lf
+scripts/backup/operational/nextcloud-recovery-ssh text eol=lf
+scripts/restore/nextcloud-restore text eol=lf
+scripts/restore/nextcloud-restore-ssh text eol=lf

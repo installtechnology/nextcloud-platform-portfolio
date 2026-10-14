@@ -1,0 +1,157 @@
+name: Deploy platform (manual)
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: GitHub Environment previamente configurado e protegido
+        type: string
+        required: true
+        default: lab
+      mode:
+        description: Plan não provisiona; apply cria recursos e gera custos
+        type: choice
+        options: [plan, apply]
+        default: plan
+        required: true
+      confirmation:
+        description: Digite APPLY somente para autorizar mode=apply
+        type: string
+        required: false
+      purpose:
+        description: Instalação nova ou preparar servidor vazio para restore separado
+        type: choice
+        options: [new_installation, prepare_restore, create_restore_target]
+        default: new_installation
+        required: true
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    environment: ${{ inputs.environment }}
+    concurrency:
+      # Reutilizar este grupo nos futuros workflows operacionais da mesma conta/projeto/ambiente.
+      group: aws-${{ vars.AWS_ACCOUNT_ID }}-${{ vars.PROJECT_NAME }}-${{ inputs.environment }}
+      cancel-in-progress: false
+    defaults:
+      run:
+        shell: bash
+    env:
+      TF_IN_AUTOMATION: 'true'
+      TF_INPUT: 'false'
+      TF_WORKSPACE: default
+      AWS_EC2_METADATA_DISABLED: 'true'
+      AWS_ACCOUNT_ID: ${{ vars.AWS_ACCOUNT_ID }}
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      AWS_ROLE_ARN: ${{ vars.AWS_ROLE_ARN }}
+      PROJECT_NAME: ${{ vars.PROJECT_NAME }}
+      STATE_BUCKET_NAME: ${{ vars.STATE_BUCKET_NAME }}
+      DATA_BUCKET_NAME: ${{ vars.DATA_BUCKET_NAME }}
+      BACKUPS_BUCKET_NAME: ${{ vars.BACKUPS_BUCKET_NAME }}
+      DEPLOY_BRANCH: ${{ vars.DEPLOY_BRANCH }}
+      SSH_PUBLIC_KEY: ${{ vars.SSH_PUBLIC_KEY }}
+      SSH_ALLOWED_CIDRS: ${{ vars.SSH_ALLOWED_CIDRS }}
+      HTTP_ALLOWED_CIDRS: ${{ vars.HTTP_ALLOWED_CIDRS }}
+      INSTANCE_TYPE: ${{ vars.INSTANCE_TYPE }}
+      ROOT_VOLUME_SIZE_GIB: ${{ vars.ROOT_VOLUME_SIZE_GIB }}
+      DEPLOY_ENVIRONMENT: ${{ inputs.environment }}
+      DEPLOY_MODE: ${{ inputs.mode }}
+      DEPLOY_PURPOSE: ${{ inputs.purpose }}
+      RESTORE_HOST_CONFIGURATION: ${{ vars.RESTORE_HOST_CONFIGURATION }}
+      REPROVISION_CONFIGURATION: ${{ vars.REPROVISION_CONFIGURATION }}
+      REPROVISION_ROLE_ARN: ${{ vars.REPROVISION_ROLE_ARN }}
+      RESTORE_SSH_PUBLIC_KEY: ${{ vars.RESTORE_SSH_PUBLIC_KEY }}
+      RECOVERY_INSTANCE_ID: ${{ vars.RECOVERY_INSTANCE_ID }}
+      CONFIRMATION: ${{ inputs.confirmation }}
+      NEXTCLOUD_ADMIN_USER: ${{ vars.NEXTCLOUD_ADMIN_USER }}
+      GRAFANA_ADMIN_USER: ${{ vars.GRAFANA_ADMIN_USER }}
+      ANSIBLE_CONFIG: ${{ github.workspace }}/ansible/ansible.cfg
+      ANSIBLE_HOST_KEY_CHECKING: 'True'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Validate inputs and explicit apply gate
+        run: python3 scripts/ci/deploy.py prepare
+      - name: Validate required deploy secrets before provisioning
+        if: inputs.mode == 'apply'
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          NEXTCLOUD_ADMIN_PASSWORD: ${{ secrets.NEXTCLOUD_ADMIN_PASSWORD }}
+          POSTGRES_ADMIN_PASSWORD: ${{ secrets.POSTGRES_ADMIN_PASSWORD }}
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+          REDIS_PASSWORD: ${{ secrets.REDIS_PASSWORD }}
+          GRAFANA_ADMIN_PASSWORD: ${{ secrets.GRAFANA_ADMIN_PASSWORD }}
+        run: python3 scripts/ci/deploy.py preflight
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_version: 1.14.2
+          terraform_wrapper: false
+      - name: Authenticate AWS using OIDC
+        if: inputs.purpose != 'create_restore_target'
+        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+          allowed-account-ids: ${{ vars.AWS_ACCOUNT_ID }}
+          role-session-name: deploy-${{ github.run_id }}-${{ github.run_attempt }}
+          role-duration-seconds: 7200
+          unset-current-credentials: true
+      - name: Install controller dependencies and validate Ansible
+        run: |
+          python3 -m venv "$RUNNER_TEMP/ansible-venv"
+          "$RUNNER_TEMP/ansible-venv/bin/pip" install -r ansible/requirements-control.txt
+          "$RUNNER_TEMP/ansible-venv/bin/ansible-galaxy" collection install -r ansible/requirements.yml
+          echo "$RUNNER_TEMP/ansible-venv/bin" >> "$GITHUB_PATH"
+          cd ansible
+          "$RUNNER_TEMP/ansible-venv/bin/ansible-playbook" -i inventory/hosts.yml.example playbooks/deploy.yml --syntax-check
+          "$RUNNER_TEMP/ansible-venv/bin/ansible-lint" -c ../.ansible-lint playbooks/deploy.yml
+          "$RUNNER_TEMP/ansible-venv/bin/ansible-playbook" -i inventory/hosts.yml.example playbooks/restore-prepare.yml --syntax-check
+          "$RUNNER_TEMP/ansible-venv/bin/ansible-playbook" -i inventory/hosts.yml.example playbooks/creation-handoff-prepare.yml --syntax-check
+      - name: Plan only
+        if: inputs.mode == 'plan' && inputs.purpose != 'create_restore_target'
+        run: python3 scripts/ci/deploy.py terraform
+      - name: Reject cold creation without its run-bound administrative grant
+        if: inputs.mode == 'plan' && inputs.purpose == 'create_restore_target'
+        run: |
+          echo 'Cold creation uses a separately reviewed grant and saved creation plan; no unguarded plan/apply route.'
+          exit 2
+      - name: Prepare pinned operational SDK and portable SSM plugin
+        if: inputs.mode == 'apply'
+        env:
+          SSM_PLUGIN_PACKAGE_SHA256: ${{ vars.SSM_PLUGIN_PACKAGE_SHA256 }}
+        run: |
+          /usr/bin/python3.12 -m scripts.backup.operational.dependencies prepare "$RUNNER_TEMP/nextcloud-operational"
+          /usr/bin/python3.12 -m scripts.backup.operational.plugin
+      - name: Hold remote lease across both applies and application deployment
+        if: inputs.mode == 'apply' && inputs.purpose != 'create_restore_target'
+        env:
+          DEPLOY_GUARD_ROLE_ARN: ${{ vars.DEPLOY_GUARD_ROLE_ARN }}
+          RECOVERY_INSTANCE_ID: ${{ vars.RECOVERY_INSTANCE_ID }}
+          RECOVERY_KNOWN_HOSTS: ${{ vars.RECOVERY_KNOWN_HOSTS }}
+          RECOVERY_SSH_PRIVATE_KEY: ${{ secrets.RECOVERY_SSH_PRIVATE_KEY }}
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          NEXTCLOUD_ADMIN_PASSWORD: ${{ secrets.NEXTCLOUD_ADMIN_PASSWORD }}
+          POSTGRES_ADMIN_PASSWORD: ${{ secrets.POSTGRES_ADMIN_PASSWORD }}
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+          REDIS_PASSWORD: ${{ secrets.REDIS_PASSWORD }}
+          GRAFANA_ADMIN_PASSWORD: ${{ secrets.GRAFANA_ADMIN_PASSWORD }}
+        run: '"$RUNNER_TEMP/nextcloud-operational/venv/bin/python" -m scripts.backup.operational.runner deploy'
+      - name: Hold versioned creation authority and hand off to verified destination lease
+        if: inputs.mode == 'apply' && inputs.purpose == 'create_restore_target'
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+        run: '"$RUNNER_TEMP/nextcloud-operational/venv/bin/python" -m scripts.restore.reprovision_runner'
+      - name: Show current Nextcloud and Grafana browser URLs
+        if: inputs.mode == 'apply'
+        run: python3 scripts/ci/deploy.py summary
+      - name: Revoke current run SSH ingress and delete temporary files
+        if: always()
+        run: python3 scripts/ci/deploy.py cleanup

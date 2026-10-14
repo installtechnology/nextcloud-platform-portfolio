@@ -1,0 +1,99 @@
+# Validation only: the workflow name is the existing OIDC role claim, not a new trust grant.
+name: Backup platform (operational manual)
+on:
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        required: true
+        type: string
+        description: VALIDATE_SSM; authenticated channel only, no backup
+permissions:
+  contents: read
+jobs:
+  ssm_readonly:
+    if: github.ref == 'refs/heads/main' && inputs.confirmation == 'VALIDATE_SSM'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    environment: lab
+    permissions:
+      contents: read
+      id-token: write
+    concurrency:
+      group: aws-${{ vars.AWS_ACCOUNT_ID }}-${{ vars.PROJECT_NAME }}-lab
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+          ref: ${{ github.sha }}
+      - name: Prepare approved private venv
+        run: /usr/bin/python3.12 -m scripts.backup.operational.dependencies prepare "$RUNNER_TEMP/nextcloud-operational"
+      - name: Prepare approved portable plugin
+        env:
+          SSM_PLUGIN_PACKAGE_SHA256: ${{ vars.SSM_PLUGIN_PACKAGE_SHA256 }}
+        run: /usr/bin/python3.12 -m scripts.backup.operational.plugin
+      - name: One authenticated SSH rejection, no dispatcher operation
+        env:
+          AWS_ACCOUNT_ID: ${{ vars.AWS_ACCOUNT_ID }}
+          AWS_REGION: ${{ vars.AWS_REGION }}
+          BACKUP_ROLE_ARN: ${{ vars.BACKUP_ROLE_ARN }}
+          RECOVERY_INSTANCE_ID: ${{ vars.RECOVERY_INSTANCE_ID }}
+          RECOVERY_KNOWN_HOSTS: ${{ vars.RECOVERY_KNOWN_HOSTS }}
+          RECOVERY_SSH_PRIVATE_KEY: ${{ secrets.RECOVERY_SSH_PRIVATE_KEY }}
+        run: |
+          "$RUNNER_TEMP/nextcloud-operational/venv/bin/python" - <<'PY'
+          import json,os,subprocess,tempfile,time
+          from pathlib import Path
+          from scripts.backup.operational.oidc import assume_oidc
+          from scripts.backup.operational.sdk import clients
+          from scripts.backup.operational.host_worker import credentials
+          from scripts.backup.operational.ssm import Target,SSMChannel,ssh_options
+          from scripts.backup.operational.ssh_channel import SSHChannel,verified_plugin
+          assert os.environ['GITHUB_REF']=='refs/heads/main' and os.environ['GITHUB_EVENT_NAME']=='workflow_dispatch'
+          t=Target(os.environ['AWS_ACCOUNT_ID'],os.environ['AWS_REGION'],os.environ['RECOVERY_INSTANCE_ID'],'nextcloud-platform-lab-backup')
+          record=assume_oidc(os.environ['BACKUP_ROLE_ARN'],t,'nc-ssm-check-'+os.environ['GITHUB_RUN_ID'])
+          try:
+            sdk=clients(credentials(record),t)
+            plugin=verified_plugin(os.environ['SSM_PLUGIN_PATH'],os.environ['SSM_PLUGIN_SHA256'])
+            alias='ncbackup-'+t.instance;known=os.environ['RECOVERY_KNOWN_HOSTS'];key=os.environ['RECOVERY_SSH_PRIVATE_KEY']
+            assert len(known.splitlines())==1 and known.split()[:2]==[alias,'ssh-ed25519']
+            os.umask(0o077)
+            with tempfile.TemporaryDirectory() as folder:
+              base=Path(folder)
+              for name,data in [('known_hosts',known),('key',key)]:
+                p=base/name;p.write_text(data.replace('\r\n','\n').strip()+'\n');p.chmod(0o600)
+              transport=SSHChannel(SSMChannel(sdk['ssm'],sdk['sts'],t),plugin,base/'known_hosts',base/'key',alias)
+              with transport.ssm.session(transport.bridge) as socket_path:
+                import shlex,sys
+                proxy=shlex.join([sys.executable,'-m','scripts.backup.operational.proxy',socket_path])
+                options=ssh_options(str(base/'known_hosts'),str(base/'key'),alias)
+                i=options.index('ControlMaster=no');del options[i-1:i+1]
+                control=str(base/'ssh-control')
+                args=['/usr/bin/ssh',*options,'-o','ProxyCommand='+proxy,'-S',control]
+                env={'PATH':'/usr/bin:/bin','LANG':'C.UTF-8'}
+                master=subprocess.Popen([*args,'-M','-N','ncbackup@'+t.instance],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,env=env)
+                try:
+                  deadline=time.monotonic()+40
+                  while True:
+                    check=subprocess.run(['/usr/bin/ssh','-S',control,'-O','check','ncbackup@'+t.instance],capture_output=True,timeout=5,env=env)
+                    if check.returncode==0:break
+                    assert master.poll() is None and time.monotonic()<deadline,'SSM_SSH_AUTHENTICATION_FAILED'
+                    time.sleep(0.25)
+                  print('SSM_SSH_AUTHENTICATED')
+                  # Existing allowed dispatcher; EOF rejects its protocol before
+                  # credentials, lease acquisition, journals or any host operation.
+                  channel=['/usr/bin/ssh','-S',control,'-o','ProxyCommand=false','-o','BatchMode=yes']
+                  allowed=subprocess.run([*channel,'ncbackup@'+t.instance,'sudo','-n','/usr/local/libexec/nextcloud-recovery','lease'],input=b'',capture_output=True,timeout=15,env=env)
+                  assert allowed.returncode==2 and not allowed.stdout,'PERMITTED_DISPATCHER_FAIL_CLOSED_NOT_PROVED'
+                  print('PERMITTED_LEASE_COMMAND_SENT; EMPTY_PROTOCOL_REJECTED_BEFORE_ACQUIRE')
+                  rejected=subprocess.run([*channel,'ncbackup@'+t.instance,'qualification_readonly_rejected'],input=b'',capture_output=True,timeout=15,env=env)
+                  assert rejected.returncode==2 and not rejected.stdout,'UNAUTHORIZED_COMMAND_NOT_REJECTED'
+                  print('UNAPPROVED_DISPATCHER_COMMAND_REJECTED')
+                finally:
+                  subprocess.run(['/usr/bin/ssh','-S',control,'-O','exit','ncbackup@'+t.instance],capture_output=True,timeout=5,env=env)
+                  if master.poll() is None:master.terminate()
+                  master.wait(timeout=5)
+              print('SSM_SESSION_TERMINATED')
+          finally:
+            record.clear()
+          PY

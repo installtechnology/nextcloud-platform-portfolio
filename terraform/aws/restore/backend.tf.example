@@ -1,0 +1,10 @@
+# Copy only after authorization. Never reuse the live runtime/persistent key.
+terraform {
+  backend "s3" {
+    bucket = "REVIEWED_STATE_BUCKET"
+    key = "states/ACCOUNT/PROJECT/DESTINATION/restore/terraform.tfstate"
+    region = "REVIEWED_REGION"
+    use_lockfile = true
+    encrypt = true
+  }
+}

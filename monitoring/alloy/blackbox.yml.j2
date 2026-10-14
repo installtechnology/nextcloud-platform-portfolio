@@ -1,0 +1,17 @@
+modules:
+  nextcloud_status:
+    prober: http
+    timeout: 5s
+    http:
+      method: GET
+      preferred_ip_protocol: ip4
+      valid_status_codes: [200]
+      headers:
+        Host: {{ nextcloud_stack_trusted_domains.split(' ')[0] | to_json }}
+      fail_if_body_not_matches_regexp:
+        - '"installed"\s*:\s*true'
+        - '"maintenance"\s*:\s*false'
+        - '"needsDbUpgrade"\s*:\s*false'
+  tcp_connect:
+    prober: tcp
+    timeout: 3s

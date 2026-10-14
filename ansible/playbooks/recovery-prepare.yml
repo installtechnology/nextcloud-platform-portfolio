@@ -1,0 +1,8 @@
+---
+# Separate manual administrative installation. Never imported by deploy.yml.
+- name: Prepare reviewed recovery guards without starting capture or broker
+  hosts: platform
+  become: true
+  gather_facts: true
+  roles:
+    - recovery_operational

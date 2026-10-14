@@ -1,0 +1,688 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:nextcloud-platform:recovery:manifest:1",
+  "title": "Nextcloud recovery manifest v1",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "kind": {
+      "const": "recovery-manifest"
+    },
+    "backup_id": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^[0-9]{8}T[0-9]{6}Z-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}(?![\\s\\S])"
+    },
+    "status": {
+      "const": "complete_integrity_verified"
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]+)?Z(?![\\s\\S])"
+    },
+    "mode": {
+      "const": "version_referenced_data_bucket"
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "account_id": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[0-9]{12}(?![\\s\\S])"
+        },
+        "project": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[a-z][a-z0-9-]{1,63}(?![\\s\\S])"
+        },
+        "environment": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[a-z][a-z0-9-]{1,63}(?![\\s\\S])"
+        },
+        "installation_identity_sha256": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[0-9a-f]{64}(?![\\s\\S])"
+        },
+        "data_bucket": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[a-z0-9][a-z0-9-]{1,61}[a-z0-9](?![\\s\\S])"
+        },
+        "region": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[a-z]{2}(-[a-z]+)+-[0-9]+(?![\\s\\S])"
+        }
+      },
+      "required": [
+        "account_id",
+        "project",
+        "environment",
+        "installation_identity_sha256",
+        "data_bucket",
+        "region"
+      ]
+    },
+    "dependencies": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "data_bucket_and_versions_required": {
+          "const": true
+        },
+        "protects_against_data_bucket_loss": {
+          "const": false
+        },
+        "secret_recovery_required": {
+          "const": true
+        },
+        "private_decryption_key_required": {
+          "const": true
+        }
+      },
+      "required": [
+        "data_bucket_and_versions_required",
+        "protects_against_data_bucket_loss",
+        "secret_recovery_required",
+        "private_decryption_key_required"
+      ]
+    },
+    "compatibility": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "repository_commit": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[0-9a-f]{40}(?![\\s\\S])"
+        },
+        "nextcloud_version": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^34\\.[0-9]+\\.[0-9]+(?![\\s\\S])"
+        },
+        "postgres_major": {
+          "const": 17
+        },
+        "nextcloud_image": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^nextcloud:34\\.[0-9]+\\.[0-9]+-apache@sha256:[0-9a-f]{64}(?![\\s\\S])"
+        },
+        "postgres_image": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^postgres:17\\.[0-9]+-bookworm@sha256:[0-9a-f]{64}(?![\\s\\S])"
+        },
+        "database_name": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[a-z][a-z0-9_]{1,62}(?![\\s\\S])"
+        },
+        "database_owner": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[a-z][a-z0-9_]{1,62}(?![\\s\\S])"
+        },
+        "table_prefix": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[a-z][a-z0-9_]*(?![\\s\\S])"
+        }
+      },
+      "required": [
+        "repository_commit",
+        "nextcloud_version",
+        "postgres_major",
+        "nextcloud_image",
+        "postgres_image",
+        "database_name",
+        "database_owner",
+        "table_prefix"
+      ]
+    },
+    "consistency": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[a-z][a-z0-9-]{1,63}(?![\\s\\S])"
+        },
+        "quiesced_at": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]+)?Z(?![\\s\\S])"
+        },
+        "capture_finished_at": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]+)?Z(?![\\s\\S])"
+        },
+        "application_writers_quiesced": {
+          "const": true
+        },
+        "background_writers_quiesced": {
+          "const": true
+        },
+        "inflight_requests_drained": {
+          "const": true
+        },
+        "inventory_before_sha256": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[0-9a-f]{64}(?![\\s\\S])"
+        },
+        "inventory_after_sha256": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[0-9a-f]{64}(?![\\s\\S])"
+        },
+        "maintenance_initially_enabled": {
+          "type": "boolean"
+        },
+        "original_service_state_restored": {
+          "const": true
+        }
+      },
+      "required": [
+        "id",
+        "quiesced_at",
+        "capture_finished_at",
+        "application_writers_quiesced",
+        "background_writers_quiesced",
+        "inflight_requests_drained",
+        "inventory_before_sha256",
+        "inventory_after_sha256",
+        "maintenance_initially_enabled",
+        "original_service_state_restored"
+      ]
+    },
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "postgres_application_database": {
+          "const": true
+        },
+        "database_roles_and_extensions_in_parameters": {
+          "const": true
+        },
+        "nextcloud_all_config_and_storage_marker": {
+          "const": true
+        },
+        "mutable_local_files_apps_themes": {
+          "const": true
+        },
+        "required_secret_values_encrypted": {
+          "const": true
+        },
+        "observability_volumes_excluded": {
+          "const": true
+        },
+        "redis_cache_excluded": {
+          "const": true
+        }
+      },
+      "required": [
+        "postgres_application_database",
+        "database_roles_and_extensions_in_parameters",
+        "nextcloud_all_config_and_storage_marker",
+        "mutable_local_files_apps_themes",
+        "required_secret_values_encrypted",
+        "observability_volumes_excluded",
+        "redis_cache_excluded"
+      ]
+    },
+    "artifacts": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "database": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "database"
+            },
+            "format": {
+              "const": "pg-custom"
+            },
+            "backup_id": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "^[0-9]{8}T[0-9]{6}Z-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}(?![\\s\\S])"
+            },
+            "consistency_id": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "^[a-z][a-z0-9-]{1,63}(?![\\s\\S])"
+            },
+            "bucket": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "^[a-z0-9][a-z0-9-]{1,61}[a-z0-9](?![\\s\\S])"
+            },
+            "key": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "^backups/[A-Za-z0-9-]+/[a-z][a-z0-9_.-]+\\.age(?![\\s\\S])"
+            },
+            "version_id": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "^(?!null(?![\\s\\S]))[^\\s\\x00-\\x1f\\x7f]+(?![\\s\\S])",
+              "maxLength": 1024
+            },
+            "size_bytes": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "ciphertext_sha256": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "^[0-9a-f]{64}(?![\\s\\S])"
+            },
+            "encryption": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "method": {
+                  "const": "age-v1"
+                },
+                "recipient_id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "pattern": "^[a-z][a-z0-9-]{1,63}(?![\\s\\S])"
+                }
+              },
+              "required": [
+                "method",
+                "recipient_id"
+              ]
+            }
+          },
+          "required": [
+            "kind",
+            "format",
+            "backup_id",
+            "consistency_id",
+            "bucket",
+            "key",
+            "version_id",
+            "size_bytes",
+            "ciphertext_sha256",
+            "encryption"
+          ]
+        },
+        "configuration": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "configuration"
+            },
+            "format": {
+              "const": "tar"
+            },
+            "backup_id": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "^[0-9]{8}T[0-9]{6}Z-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}(?![\\s\\S])"
+            },
+            "consistency_id": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "^[a-z][a-z0-9-]{1,63}(?![\\s\\S])"
+            },
+            "bucket": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "^[a-z0-9][a-z0-9-]{1,61}[a-z0-9](?![\\s\\S])"
+            },
+            "key": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "^backups/[A-Za-z0-9-]+/[a-z][a-z0-9_.-]+\\.age(?![\\s\\S])"
+            },
+            "version_id": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "^(?!null(?![\\s\\S]))[^\\s\\x00-\\x1f\\x7f]+(?![\\s\\S])",
+              "maxLength": 1024
+            },
+            "size_bytes": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "ciphertext_sha256": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "^[0-9a-f]{64}(?![\\s\\S])"
+            },
+            "encryption": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "method": {
+                  "const": "age-v1"
+                },
+                "recipient_id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "pattern": "^[a-z][a-z0-9-]{1,63}(?![\\s\\S])"
+                }
+              },
+              "required": [
+                "method",
+                "recipient_id"
+              ]
+            }
+          },
+          "required": [
+            "kind",
+            "format",
+            "backup_id",
+            "consistency_id",
+            "bucket",
+            "key",
+            "version_id",
+            "size_bytes",
+            "ciphertext_sha256",
+            "encryption"
+          ]
+        },
+        "local_files": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "local_files"
+            },
+            "format": {
+              "const": "tar"
+            },
+            "backup_id": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "^[0-9]{8}T[0-9]{6}Z-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}(?![\\s\\S])"
+            },
+            "consistency_id": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "^[a-z][a-z0-9-]{1,63}(?![\\s\\S])"
+            },
+            "bucket": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "^[a-z0-9][a-z0-9-]{1,61}[a-z0-9](?![\\s\\S])"
+            },
+            "key": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "^backups/[A-Za-z0-9-]+/[a-z][a-z0-9_.-]+\\.age(?![\\s\\S])"
+            },
+            "version_id": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "^(?!null(?![\\s\\S]))[^\\s\\x00-\\x1f\\x7f]+(?![\\s\\S])",
+              "maxLength": 1024
+            },
+            "size_bytes": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "ciphertext_sha256": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "^[0-9a-f]{64}(?![\\s\\S])"
+            },
+            "encryption": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "method": {
+                  "const": "age-v1"
+                },
+                "recipient_id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "pattern": "^[a-z][a-z0-9-]{1,63}(?![\\s\\S])"
+                }
+              },
+              "required": [
+                "method",
+                "recipient_id"
+              ]
+            }
+          },
+          "required": [
+            "kind",
+            "format",
+            "backup_id",
+            "consistency_id",
+            "bucket",
+            "key",
+            "version_id",
+            "size_bytes",
+            "ciphertext_sha256",
+            "encryption"
+          ]
+        },
+        "recovery_parameters": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "recovery_parameters"
+            },
+            "format": {
+              "const": "json"
+            },
+            "backup_id": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "^[0-9]{8}T[0-9]{6}Z-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}(?![\\s\\S])"
+            },
+            "consistency_id": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "^[a-z][a-z0-9-]{1,63}(?![\\s\\S])"
+            },
+            "bucket": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "^[a-z0-9][a-z0-9-]{1,61}[a-z0-9](?![\\s\\S])"
+            },
+            "key": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "^backups/[A-Za-z0-9-]+/[a-z][a-z0-9_.-]+\\.age(?![\\s\\S])"
+            },
+            "version_id": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "^(?!null(?![\\s\\S]))[^\\s\\x00-\\x1f\\x7f]+(?![\\s\\S])",
+              "maxLength": 1024
+            },
+            "size_bytes": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "ciphertext_sha256": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "^[0-9a-f]{64}(?![\\s\\S])"
+            },
+            "encryption": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "method": {
+                  "const": "age-v1"
+                },
+                "recipient_id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "pattern": "^[a-z][a-z0-9-]{1,63}(?![\\s\\S])"
+                }
+              },
+              "required": [
+                "method",
+                "recipient_id"
+              ]
+            }
+          },
+          "required": [
+            "kind",
+            "format",
+            "backup_id",
+            "consistency_id",
+            "bucket",
+            "key",
+            "version_id",
+            "size_bytes",
+            "ciphertext_sha256",
+            "encryption"
+          ]
+        },
+        "object_inventory": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "object_inventory"
+            },
+            "format": {
+              "const": "json"
+            },
+            "backup_id": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "^[0-9]{8}T[0-9]{6}Z-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}(?![\\s\\S])"
+            },
+            "consistency_id": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "^[a-z][a-z0-9-]{1,63}(?![\\s\\S])"
+            },
+            "bucket": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "^[a-z0-9][a-z0-9-]{1,61}[a-z0-9](?![\\s\\S])"
+            },
+            "key": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "^backups/[A-Za-z0-9-]+/[a-z][a-z0-9_.-]+\\.age(?![\\s\\S])"
+            },
+            "version_id": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "^(?!null(?![\\s\\S]))[^\\s\\x00-\\x1f\\x7f]+(?![\\s\\S])",
+              "maxLength": 1024
+            },
+            "size_bytes": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "ciphertext_sha256": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "^[0-9a-f]{64}(?![\\s\\S])"
+            },
+            "encryption": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "method": {
+                  "const": "age-v1"
+                },
+                "recipient_id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "pattern": "^[a-z][a-z0-9-]{1,63}(?![\\s\\S])"
+                }
+              },
+              "required": [
+                "method",
+                "recipient_id"
+              ]
+            }
+          },
+          "required": [
+            "kind",
+            "format",
+            "backup_id",
+            "consistency_id",
+            "bucket",
+            "key",
+            "version_id",
+            "size_bytes",
+            "ciphertext_sha256",
+            "encryption"
+          ]
+        }
+      },
+      "required": [
+        "database",
+        "configuration",
+        "local_files",
+        "recovery_parameters",
+        "object_inventory"
+      ]
+    },
+    "verification": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "dump_catalog_readable": {
+          "const": true
+        },
+        "ciphertext_checksums_verified_after_download": {
+          "const": true
+        },
+        "all_artifact_versions_available": {
+          "const": true
+        },
+        "all_referenced_data_versions_available_at_verification": {
+          "const": true
+        },
+        "restore_proven": {
+          "const": false
+        }
+      },
+      "required": [
+        "dump_catalog_readable",
+        "ciphertext_checksums_verified_after_download",
+        "all_artifact_versions_available",
+        "all_referenced_data_versions_available_at_verification",
+        "restore_proven"
+      ]
+    }
+  },
+  "required": [
+    "schema_version",
+    "kind",
+    "backup_id",
+    "status",
+    "created_at",
+    "mode",
+    "source",
+    "dependencies",
+    "compatibility",
+    "consistency",
+    "scope",
+    "artifacts",
+    "verification"
+  ]
+}

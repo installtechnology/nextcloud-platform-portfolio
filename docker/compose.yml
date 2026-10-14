@@ -1,0 +1,269 @@
+x-platform-logging: &platform-logging
+  driver: json-file
+  options:
+    max-size: '5m'
+    max-file: '3'
+    labels: com.docker.compose.project,com.docker.compose.service
+
+services:
+  postgres:
+    logging: *platform-logging
+    image: postgres:17.11-bookworm@sha256:3645570cccdfa447589da9f57dd740faa29b30938e861289a5574b6ca6b03826
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:?Configure POSTGRES_DB}
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_admin_password
+      APP_POSTGRES_DB: ${POSTGRES_DB:?Configure POSTGRES_DB}
+      APP_POSTGRES_USER: ${POSTGRES_USER:?Configure POSTGRES_USER}
+    secrets:
+      - postgres_admin_password
+      - postgres_password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./postgres-init.sh:/docker-entrypoint-initdb.d/10-nextcloud.sh:ro
+    networks: [backend]
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -h 127.0.0.1 -U postgres -d "$$POSTGRES_DB"']
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+  redis:
+    logging: *platform-logging
+    image: redis:7.4.8-bookworm@sha256:3e0669e42d4fe421c9dea0ba5fbc04d336b80b4f32a6c7d25bee3a1d089288a1
+    restart: unless-stopped
+    user: redis
+    entrypoint: [/bin/sh, /usr/local/bin/platform-redis-entrypoint.sh]
+    secrets: [redis_password]
+    volumes:
+      - ./redis-entrypoint.sh:/usr/local/bin/platform-redis-entrypoint.sh:ro
+    tmpfs: [/tmp:mode=1777, /data:mode=1777]
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    networks: [backend]
+    healthcheck:
+      test: [CMD-SHELL, 'REDISCLI_AUTH="$$(cat /run/secrets/redis_password)" redis-cli --no-auth-warning ping | grep -qx PONG']
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  nextcloud:
+    logging: *platform-logging
+    image: nextcloud:34.0.4-apache@sha256:72f5cc3347042dd5dcad72edc376b19d0e042194af344a549820affd04804c8f
+    restart: unless-stopped
+    depends_on:
+      postgres: {condition: service_healthy}
+      redis: {condition: service_healthy}
+    ports:
+      - "${NEXTCLOUD_BIND_ADDRESS:-0.0.0.0}:${NEXTCLOUD_HTTP_PORT:-80}:80"
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_DB: ${POSTGRES_DB:?Configure POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER:?Configure POSTGRES_USER}
+      # Our before-starting installer owns initialization. Disable native auto-install,
+      # which runs only once and passes passwords through maintenance:install argv.
+      PLATFORM_POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+      PLATFORM_ADMIN_USER: ${NEXTCLOUD_ADMIN_USER:?Configure NEXTCLOUD_ADMIN_USER}
+      PLATFORM_ADMIN_PASSWORD_FILE: /run/secrets/nextcloud_admin_password
+      NEXTCLOUD_TRUSTED_DOMAINS: ${NEXTCLOUD_TRUSTED_DOMAINS:?Configure NEXTCLOUD_TRUSTED_DOMAINS}
+      NEXTCLOUD_S3_BUCKET: ${NEXTCLOUD_S3_BUCKET:?Configure bucket exclusivo de dados}
+      NEXTCLOUD_S3_REGION: ${NEXTCLOUD_S3_REGION:?Configure região do bucket de dados}
+      REDIS_HOST: redis
+      REDIS_HOST_PORT: '6379'
+      REDIS_HOST_PASSWORD_FILE: /run/secrets/redis_password
+    secrets: [postgres_password, nextcloud_admin_password, redis_password]
+    volumes:
+      - nextcloud_html:/var/www/html
+      - ./nextcloud-healthcheck.php:/opt/platform/healthcheck.php:ro
+      - ./nextcloud-integration.php:/opt/platform/integration.php:ro
+      - ./platform.config.php:/opt/platform/platform.config.php:ro
+      - ./configure-nextcloud.sh:/docker-entrypoint-hooks.d/before-starting/10-platform.sh:ro
+      - ./storage-guard.php:/opt/platform/storage-guard.php:ro
+      - ./install-nextcloud.php:/opt/platform/install-nextcloud.php:ro
+    networks: [backend, frontend]
+    healthcheck:
+      test: [CMD, php, /opt/platform/healthcheck.php]
+      interval: 15s
+      timeout: 10s
+      retries: 20
+      start_period: 120s
+
+  prometheus:
+    image: prom/prometheus:v3.15.0@sha256:efd719c99d83b060d9daefdcf00360461adf279f45ef5391f8d111892118753e
+    restart: unless-stopped
+    logging: *platform-logging
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=48h
+      - --storage.tsdb.retention.size=1GB
+      - --web.enable-remote-write-receiver
+      - --log.level=warn
+    volumes:
+      - prometheus_data:/prometheus
+      - ../monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ../monitoring/prometheus/rules:/etc/prometheus/rules:ro
+    networks: [observability]
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    healthcheck:
+      test: [CMD, wget, -q, -O, /dev/null, 'http://127.0.0.1:9090/-/ready']
+      interval: 15s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+  grafana:
+    image: grafana/grafana:13.2.3@sha256:b28bae15e219c998fb0e0424ed724930cc61b1f61fb404d47c862f9a23f9e572
+    restart: unless-stopped
+    logging: *platform-logging
+    depends_on:
+      prometheus: {condition: service_healthy}
+      loki: {condition: service_started}
+    ports:
+      # Explicit IPv4 publication; external authorization is enforced by the EC2 SG.
+      - '0.0.0.0:${GRAFANA_HTTP_PORT:-3000}:3000'
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:?Configure usuário Grafana}
+      GF_SECURITY_ADMIN_PASSWORD__FILE: /run/secrets/grafana_admin_password
+      GF_SERVER_ROOT_URL: http://${GRAFANA_PUBLIC_HOST:?Configure IPv4 atual via Ansible}:${GRAFANA_HTTP_PORT:-3000}/
+      GF_AUTH_ANONYMOUS_ENABLED: 'false'
+      GF_USERS_ALLOW_SIGN_UP: 'false'
+      GF_ANALYTICS_REPORTING_ENABLED: 'false'
+      GF_ANALYTICS_CHECK_FOR_UPDATES: 'false'
+      GF_ANALYTICS_CHECK_FOR_PLUGIN_UPDATES: 'false'
+      GF_PLUGINS_PREINSTALL_DISABLED: 'true'
+      GF_PLUGINS_PREINSTALL_AUTO_UPDATE: 'false'
+      GF_UNIFIED_ALERTING_ENABLED: 'false' # Rules live in Prometheus; shown via ALERTS dashboard.
+      GF_METRICS_ENABLED: 'true'
+      GF_LOG_MODE: console
+      GF_LOG_LEVEL: warn
+    secrets: [grafana_admin_password]
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ../monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ../monitoring/grafana/dashboards:/etc/grafana/dashboards:ro
+    networks: [observability, grafana_access]
+    read_only: true
+    tmpfs: [/tmp:mode=1777]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    healthcheck:
+      test: [CMD, curl, -fsS, 'http://127.0.0.1:3000/api/health']
+      interval: 15s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+  loki:
+    image: grafana/loki:3.7.8@sha256:1107dd5274e0ada47e42472b7a7e71f3b2a2fe878878108f3e2f9e51528f0193
+    restart: unless-stopped
+    logging: *platform-logging
+    command: [-config.file=/etc/loki/loki.yml]
+    volumes:
+      - loki_data:/loki
+      - ../monitoring/loki/loki.yml:/etc/loki/loki.yml:ro
+    networks: [observability]
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    # Distroless: readiness HTTP is validated by Ansible, not a fake CLI healthcheck.
+
+  alloy:
+    image: grafana/alloy:v1.20.1@sha256:2aa2099af76c0098d4af7a4d6e48f86cb66dc1a000222ad927a1c67c6542d13f
+    restart: unless-stopped
+    logging: *platform-logging
+    user: '0:473' # Root UID reads root-owned logs; group 473 writes Alloy's volume.
+    command:
+      - run
+      - /etc/alloy/config.alloy
+      - --storage.path=/var/lib/alloy/data
+      - --server.http.listen-addr=0.0.0.0:12345
+      - --disable-reporting
+      - --server.http.enable-pprof=false
+    environment:
+      COMPOSE_PROJECT_NAME: ${COMPOSE_PROJECT_NAME:?Configure projeto Compose}
+    volumes:
+      - alloy_data:/var/lib/alloy
+      - ../monitoring/alloy/config.alloy:/etc/alloy/config.alloy:ro
+      - ../monitoring/alloy/blackbox.yml:/etc/alloy/blackbox.yml:ro
+      - type: bind
+        source: ${DOCKER_LOG_DIRECTORY_PATH:?Configure diretório JSON de logs Docker}
+        target: /var/lib/docker/containers
+        read_only: true
+        bind: {create_host_path: false}
+    networks: [observability, backend]
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    # Official image has no HTTP client; Ansible checks /-/ready via bridge IP.
+
+  node-exporter:
+    image: prom/node-exporter:v1.12.1@sha256:1b4e4438faca4dd7e001dd445d161a4a2091b0fededa84093b3a8dfeae1f1be0
+    restart: unless-stopped
+    logging: *platform-logging
+    user: '65534:65534'
+    command:
+      - --path.procfs=/host/proc
+      - --path.sysfs=/host/sys
+      - --path.rootfs=/host/root
+      - --collector.disable-defaults
+      - --collector.cpu
+      - --collector.meminfo
+      - --collector.filesystem
+      - --collector.diskstats
+      - --collector.loadavg
+      - --collector.stat
+      - --collector.time
+      - --collector.uname
+      - --collector.filesystem.mount-points-exclude=^/(dev|proc|sys|var/lib/docker|var/lib/containerd)($|/)
+      - --log.level=warn
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/host/root:ro,rslave
+    networks: [observability]
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    healthcheck:
+      test: [CMD, wget, -q, -O, /dev/null, 'http://127.0.0.1:9100/metrics']
+      interval: 30s
+      timeout: 5s
+      retries: 5
+
+networks:
+  backend:
+    internal: true
+  frontend: {}
+  observability:
+    internal: true
+  grafana_access:
+    # Only Grafana joins this bridge; keep monitoring peers on the internal network.
+    driver: bridge
+    internal: false
+    enable_ipv6: false
+
+volumes:
+  postgres_data: {}
+  nextcloud_html: {}
+  prometheus_data: {}
+  grafana_data: {}
+  loki_data: {}
+  alloy_data: {}
+
+secrets:
+  grafana_admin_password:
+    file: ${GRAFANA_ADMIN_PASSWORD_FILE_PATH:?Configure caminho secret Grafana}
+  postgres_admin_password:
+    file: ${POSTGRES_ADMIN_PASSWORD_FILE_PATH:?Configure caminho do secret administrativo PostgreSQL}
+  postgres_password:
+    file: ${POSTGRES_PASSWORD_FILE_PATH:?Configure caminho do secret PostgreSQL da aplicação}
+  nextcloud_admin_password:
+    file: ${NEXTCLOUD_ADMIN_PASSWORD_FILE_PATH:?Configure caminho do secret Nextcloud}
+  redis_password:
+    file: ${REDIS_PASSWORD_FILE_PATH:?Configure caminho do secret Redis}

@@ -1,0 +1,5 @@
+#!/bin/sh
+set -eu
+[ "$#" -eq 1 ] && [ "$1" = restore ] || exit 2
+cd /usr/local/lib/nextcloud-recovery/repository
+exec /usr/bin/env -i PATH=/usr/bin:/bin LANG=C.UTF-8 PYTHONNOUSERSITE=1 /usr/local/lib/nextcloud-recovery/venv/bin/python -m scripts.restore.host_dispatch restore

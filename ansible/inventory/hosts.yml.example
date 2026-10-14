@@ -1,0 +1,10 @@
+---
+all:
+  children:
+    platform:
+      hosts:
+        application_host:
+          ansible_host: "{{ lookup('ansible.builtin.env', 'PLATFORM_HOST') }}"
+          ansible_user: "{{ lookup('ansible.builtin.env', 'PLATFORM_SSH_USER', default='ubuntu') }}"
+          ansible_python_interpreter: /usr/bin/python3
+          # Chave privada via ssh-agent ou --private-key, nunca neste arquivo.

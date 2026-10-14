@@ -1,0 +1,76 @@
+auth_enabled: false # Somente rede Docker interna, sem porta publicada.
+server:
+  http_listen_port: 3100
+  log_level: warn
+common:
+  instance_addr: 127.0.0.1
+  path_prefix: /loki
+  replication_factor: 1
+  ring:
+    kvstore:
+      store: inmemory
+  storage:
+    filesystem:
+      chunks_directory: /loki/chunks
+      rules_directory: /loki/rules
+schema_config:
+  configs:
+    - from: '2024-01-01'
+      store: tsdb
+      object_store: filesystem
+      schema: v13
+      index:
+        prefix: index_
+        period: 24h
+storage_config:
+  tsdb_shipper:
+    active_index_directory: /loki/index
+    cache_location: /loki/index-cache
+ruler:
+  rule_path: /loki/rules-temp # Keep default module scratch writes inside writable volume.
+compactor:
+  working_directory: /loki/compactor
+  compaction_interval: 10m
+  retention_enabled: true
+  retention_delete_delay: 1h
+  retention_delete_worker_count: 2
+  delete_request_store: filesystem
+limits_config:
+  retention_period: 24h
+  max_query_lookback: 24h
+  ingestion_rate_mb: 0.03125 # 32 KiB/s; laboratório, pode rejeitar bursts.
+  ingestion_burst_size_mb: 0.125
+  per_stream_rate_limit: 32KB
+  per_stream_rate_limit_burst: 128KB
+  max_line_size: 64KB
+  max_line_size_truncate: true
+  reject_old_samples: true
+  reject_old_samples_max_age: 24h
+  max_global_streams_per_user: 256
+  max_query_parallelism: 2
+  split_queries_by_interval: 15m
+  query_timeout: 30s
+  allow_structured_metadata: false
+ingester:
+  chunk_idle_period: 10m
+  max_chunk_age: 1h
+  chunk_target_size: 1048576
+  wal:
+    enabled: true
+    dir: /loki/wal
+    replay_memory_ceiling: 128MB
+chunk_store_config:
+  chunk_cache_config:
+    embedded_cache:
+      enabled: true
+      max_size_mb: 32
+query_range:
+  results_cache:
+    cache:
+      embedded_cache:
+        enabled: true
+        max_size_mb: 16
+querier:
+  max_concurrent: 2
+analytics:
+  reporting_enabled: false

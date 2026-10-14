@@ -1,0 +1,116 @@
+logging {
+	level = "warn"
+}
+
+// Native file discovery: no Docker socket, root reads a read-only JSON log mount.
+loki.source.file "containers" {
+	targets                 = [{__path__ = "/var/lib/docker/containers/*/*-json.log", job = "docker"}]
+	forward_to              = [loki.process.containers.receiver]
+	tail_from_end           = true
+	on_positions_file_error = "restart_from_end"
+
+	file_match {
+		enabled     = true
+		sync_period = "10s"
+	}
+
+	file_watch {
+		min_poll_frequency = "1s"
+		max_poll_frequency = "5s"
+	}
+}
+
+loki.process "containers" {
+	forward_to = [loki.write.local.receiver]
+
+	stage.json {
+		expressions = {
+			service = "attrs.\"com.docker.compose.service\"",
+			project = "attrs.\"com.docker.compose.project\"",
+		}
+	}
+
+	stage.labels {
+		values = {service = "service", project = "project"}
+	}
+
+	stage.match {
+		selector = "{project!=\"" + sys.env("COMPOSE_PROJECT_NAME") + "\"}"
+		action   = "drop"
+	}
+
+	stage.docker { }
+
+	stage.label_drop {
+		values = ["filename"]
+	}
+}
+
+loki.write "local" {
+	endpoint {
+		url                 = "http://loki:3100/loki/api/v1/push"
+		batch_size          = "128KiB"
+		batch_wait          = "1s"
+		min_backoff_period  = "500ms"
+		max_backoff_period  = "5s"
+		max_backoff_retries = 5
+	}
+}
+
+// Embedded Blackbox avoids a separate exporter container and application secrets.
+prometheus.exporter.blackbox "services" {
+	config_file = "/etc/alloy/blackbox.yml"
+
+	target {
+		name    = "nextcloud"
+		address = "http://nextcloud/status.php"
+		module  = "nextcloud_status"
+	}
+
+	target {
+		name    = "postgres"
+		address = "postgres:5432"
+		module  = "tcp_connect"
+	}
+
+	target {
+		name    = "redis"
+		address = "redis:6379"
+		module  = "tcp_connect"
+	}
+}
+
+discovery.relabel "services" {
+	targets = prometheus.exporter.blackbox.services.targets
+
+	rule {
+		source_labels = ["job"]
+		regex         = ".*/(nextcloud|postgres|redis)"
+		target_label  = "job"
+		replacement   = "$1"
+	}
+
+	rule {
+		source_labels = ["__param_target"]
+		target_label  = "instance"
+	}
+}
+
+prometheus.scrape "services" {
+	targets         = discovery.relabel.services.output
+	scrape_interval = "30s"
+	scrape_timeout  = "10s"
+	forward_to      = [prometheus.remote_write.local.receiver]
+}
+
+prometheus.remote_write "local" {
+	endpoint {
+		url = "http://prometheus:9090/api/v1/write"
+	}
+
+	wal {
+		truncate_frequency = "10m"
+		min_keepalive_time = "5m"
+		max_keepalive_time = "30m"
+	}
+}

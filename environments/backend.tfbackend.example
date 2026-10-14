@@ -1,0 +1,7 @@
+# Template ilustrativo; substituir sem credenciais e usar uma chave por root.
+bucket = "REPLACE_WITH_STATE_BUCKET"
+region = "REPLACE_WITH_REGION"
+key = "states/REPLACE_ACCOUNT/REPLACE_PROJECT/REPLACE_ENV/REPLACE_ROOT/terraform.tfstate"
+encrypt = true
+use_lockfile = true
+allowed_account_ids = ["REPLACE_ACCOUNT"]

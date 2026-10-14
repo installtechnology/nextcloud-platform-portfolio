@@ -1,0 +1,465 @@
+{
+  "name": "nc-s3-imds-test-${SANDBOX_ID:?16 lowercase hexadecimal characters required}",
+  "networks": {
+    "db_internal": {
+      "enable_ipv6": false,
+      "internal": true,
+      "labels": {
+        "platform.capture.isolated": "true",
+        "platform.sandbox.kind": "s3-imds-v1"
+      }
+    },
+    "storage_internal": {
+      "enable_ipv6": false,
+      "internal": true,
+      "labels": {
+        "platform.capture.isolated": "true",
+        "platform.sandbox.kind": "s3-imds-v1"
+      }
+    }
+  },
+  "secrets": {
+    "nextcloud_admin_password": {
+      "file": "${SANDBOX_ROOT:?Private sandbox directory required}/secrets/nextcloud_admin_password"
+    },
+    "postgres_admin_password": {
+      "file": "${SANDBOX_ROOT:?Private sandbox directory required}/secrets/postgres_admin_password"
+    },
+    "postgres_password": {
+      "file": "${SANDBOX_ROOT:?Private sandbox directory required}/secrets/postgres_password"
+    },
+    "redis_password": {
+      "file": "${SANDBOX_ROOT:?Private sandbox directory required}/secrets/redis_password"
+    }
+  },
+  "services": {
+    "imds-emulator": {
+      "cap_drop": [
+        "ALL"
+      ],
+      "entrypoint": [
+        "python",
+        "/fixture/imds.py"
+      ],
+      "environment": {
+        "PLATFORM_SANDBOX_PROJECT": "nc-s3-imds-test-${SANDBOX_ID:?16 lowercase hexadecimal characters required}",
+        "PLATFORM_SYNTHETIC_SANDBOX": "s3-imds-v1"
+      },
+      "image": "ghcr.io/getmoto/motoserver:5.1.22@sha256:117238c6e7e3b566387c4c74e6fb0b6fdc34a094920c2154cf06f11dc72d9f37",
+      "labels": {
+        "platform.capture.isolated": "true",
+        "platform.sandbox.kind": "s3-imds-v1"
+      },
+      "logging": {
+        "driver": "none"
+      },
+      "networks": {
+        "storage_internal": {
+          "aliases": [
+            "imds.sandbox.test"
+          ]
+        }
+      },
+      "platform": "linux/amd64",
+      "pull_policy": "never",
+      "read_only": true,
+      "restart": "no",
+      "security_opt": [
+        "no-new-privileges:true"
+      ],
+      "stop_grace_period": "70s",
+      "tmpfs": [
+        "/tmp:mode=1777"
+      ],
+      "user": "1000:1000",
+      "volumes": [
+        {
+          "bind": {
+            "create_host_path": false
+          },
+          "read_only": true,
+          "source": "${SANDBOX_ROOT:?Private sandbox directory required}/code/imds.py",
+          "target": "/fixture/imds.py",
+          "type": "bind"
+        },
+        {
+          "bind": {
+            "create_host_path": false
+          },
+          "read_only": true,
+          "source": "${SANDBOX_ROOT:?Private sandbox directory required}/tls/imds-emulator.crt",
+          "target": "/fixture/server.crt",
+          "type": "bind"
+        },
+        {
+          "bind": {
+            "create_host_path": false
+          },
+          "read_only": true,
+          "source": "${SANDBOX_ROOT:?Private sandbox directory required}/tls/imds-emulator.key",
+          "target": "/fixture/server.key",
+          "type": "bind"
+        }
+      ]
+    },
+    "nextcloud": {
+      "depends_on": {
+        "postgres": {
+          "condition": "service_healthy"
+        },
+        "redis": {
+          "condition": "service_healthy"
+        }
+      },
+      "environment": {
+        "AWS_EC2_METADATA_SERVICE_ENDPOINT": "https://imds.sandbox.test:1338",
+        "AWS_EC2_METADATA_V1_DISABLED": "true",
+        "NEXTCLOUD_S3_BUCKET": "fixture-data",
+        "NEXTCLOUD_S3_REGION": "us-east-1",
+        "NEXTCLOUD_TRUSTED_DOMAINS": "nextcloud",
+        "PLATFORM_ADMIN_PASSWORD_FILE": "/run/secrets/nextcloud_admin_password",
+        "PLATFORM_ADMIN_USER": "fixture_admin",
+        "PLATFORM_POSTGRES_PASSWORD_FILE": "/run/secrets/postgres_password",
+        "PLATFORM_SANDBOX_PROJECT": "nc-s3-imds-test-${SANDBOX_ID:?16 lowercase hexadecimal characters required}",
+        "PLATFORM_SYNTHETIC_SANDBOX": "s3-imds-v1",
+        "POSTGRES_DB": "fixture_db",
+        "POSTGRES_HOST": "postgres",
+        "POSTGRES_USER": "fixture_app",
+        "REDIS_HOST": "redis",
+        "REDIS_HOST_PASSWORD_FILE": "/run/secrets/redis_password",
+        "REDIS_HOST_PORT": "6379"
+      },
+      "healthcheck": {
+        "interval": "5s",
+        "retries": 30,
+        "test": [
+          "CMD",
+          "php",
+          "/opt/platform/healthcheck.php"
+        ],
+        "timeout": "5s"
+      },
+      "image": "nextcloud:34.0.4-apache@sha256:72f5cc3347042dd5dcad72edc376b19d0e042194af344a549820affd04804c8f",
+      "labels": {
+        "platform.capture.isolated": "true",
+        "platform.sandbox.kind": "s3-imds-v1"
+      },
+      "logging": {
+        "driver": "none"
+      },
+      "networks": [
+        "db_internal",
+        "storage_internal"
+      ],
+      "platform": "linux/amd64",
+      "pull_policy": "never",
+      "restart": "no",
+      "secrets": [
+        "postgres_password",
+        "nextcloud_admin_password",
+        "redis_password"
+      ],
+      "security_opt": [
+        "no-new-privileges:true"
+      ],
+      "stop_grace_period": "70s",
+      "volumes": [
+        "nextcloud_html:/var/www/html",
+        {
+          "bind": {
+            "create_host_path": false
+          },
+          "read_only": true,
+          "source": "${SANDBOX_ROOT:?Private sandbox directory required}/code/platform.config.php",
+          "target": "/opt/platform/platform.config.php",
+          "type": "bind"
+        },
+        {
+          "bind": {
+            "create_host_path": false
+          },
+          "read_only": true,
+          "source": "${SANDBOX_ROOT:?Private sandbox directory required}/code/configure-nextcloud.sh",
+          "target": "/docker-entrypoint-hooks.d/before-starting/10-platform.sh",
+          "type": "bind"
+        },
+        {
+          "bind": {
+            "create_host_path": false
+          },
+          "read_only": true,
+          "source": "${SANDBOX_ROOT:?Private sandbox directory required}/code/storage-guard.php",
+          "target": "/opt/platform/storage-guard.php",
+          "type": "bind"
+        },
+        {
+          "bind": {
+            "create_host_path": false
+          },
+          "read_only": true,
+          "source": "${SANDBOX_ROOT:?Private sandbox directory required}/code/install-nextcloud.php",
+          "target": "/opt/platform/install-original.php",
+          "type": "bind"
+        },
+        {
+          "bind": {
+            "create_host_path": false
+          },
+          "read_only": true,
+          "source": "${SANDBOX_ROOT:?Private sandbox directory required}/code/nextcloud-healthcheck.php",
+          "target": "/opt/platform/healthcheck.php",
+          "type": "bind"
+        },
+        {
+          "bind": {
+            "create_host_path": false
+          },
+          "read_only": true,
+          "source": "${SANDBOX_ROOT:?Private sandbox directory required}/code/sandbox-preflight.sh",
+          "target": "/docker-entrypoint-hooks.d/before-starting/00-sandbox.sh",
+          "type": "bind"
+        },
+        {
+          "bind": {
+            "create_host_path": false
+          },
+          "read_only": true,
+          "source": "${SANDBOX_ROOT:?Private sandbox directory required}/code/trust.ini",
+          "target": "/usr/local/etc/php/conf.d/zz-sandbox-trust.ini",
+          "type": "bind"
+        },
+        {
+          "bind": {
+            "create_host_path": false
+          },
+          "read_only": true,
+          "source": "${SANDBOX_ROOT:?Private sandbox directory required}/tls/ca.pem",
+          "target": "/fixture/ca.pem",
+          "type": "bind"
+        },
+        {
+          "bind": {
+            "create_host_path": false
+          },
+          "read_only": true,
+          "source": "${SANDBOX_ROOT:?Private sandbox directory required}/code/sandbox-preflight.php",
+          "target": "/fixture/sandbox-preflight.php",
+          "type": "bind"
+        },
+        {
+          "bind": {
+            "create_host_path": false
+          },
+          "read_only": true,
+          "source": "${SANDBOX_ROOT:?Private sandbox directory required}/code/install-sandbox.php",
+          "target": "/opt/platform/install-nextcloud.php",
+          "type": "bind"
+        }
+      ]
+    },
+    "postgres": {
+      "environment": {
+        "APP_POSTGRES_DB": "fixture_db",
+        "APP_POSTGRES_USER": "fixture_app",
+        "PLATFORM_SANDBOX_PROJECT": "nc-s3-imds-test-${SANDBOX_ID:?16 lowercase hexadecimal characters required}",
+        "PLATFORM_SYNTHETIC_SANDBOX": "s3-imds-v1",
+        "POSTGRES_DB": "fixture_db",
+        "POSTGRES_PASSWORD_FILE": "/run/secrets/postgres_admin_password",
+        "POSTGRES_USER": "postgres"
+      },
+      "healthcheck": {
+        "interval": "5s",
+        "retries": 20,
+        "test": [
+          "CMD",
+          "pg_isready",
+          "-U",
+          "postgres",
+          "-d",
+          "fixture_db"
+        ],
+        "timeout": "3s"
+      },
+      "image": "postgres:17.11-bookworm@sha256:3645570cccdfa447589da9f57dd740faa29b30938e861289a5574b6ca6b03826",
+      "labels": {
+        "platform.capture.isolated": "true",
+        "platform.sandbox.kind": "s3-imds-v1"
+      },
+      "logging": {
+        "driver": "none"
+      },
+      "networks": [
+        "db_internal"
+      ],
+      "platform": "linux/amd64",
+      "pull_policy": "never",
+      "restart": "no",
+      "secrets": [
+        "postgres_admin_password",
+        "postgres_password"
+      ],
+      "security_opt": [
+        "no-new-privileges:true"
+      ],
+      "stop_grace_period": "70s",
+      "volumes": [
+        "postgres_data:/var/lib/postgresql/data",
+        {
+          "bind": {
+            "create_host_path": false
+          },
+          "read_only": true,
+          "source": "${SANDBOX_ROOT:?Private sandbox directory required}/code/postgres-init.sh",
+          "target": "/docker-entrypoint-initdb.d/10-nextcloud.sh",
+          "type": "bind"
+        }
+      ]
+    },
+    "redis": {
+      "cap_drop": [
+        "ALL"
+      ],
+      "entrypoint": [
+        "sh",
+        "/fixture/redis-entrypoint.sh"
+      ],
+      "environment": {
+        "PLATFORM_SANDBOX_PROJECT": "nc-s3-imds-test-${SANDBOX_ID:?16 lowercase hexadecimal characters required}",
+        "PLATFORM_SYNTHETIC_SANDBOX": "s3-imds-v1"
+      },
+      "healthcheck": {
+        "interval": "5s",
+        "retries": 20,
+        "test": [
+          "CMD-SHELL",
+          "REDISCLI_AUTH=\"$$(cat /run/secrets/redis_password)\" redis-cli --no-auth-warning ping | grep -qx PONG"
+        ],
+        "timeout": "3s"
+      },
+      "image": "redis:7.4.8-bookworm@sha256:3e0669e42d4fe421c9dea0ba5fbc04d336b80b4f32a6c7d25bee3a1d089288a1",
+      "labels": {
+        "platform.capture.isolated": "true",
+        "platform.sandbox.kind": "s3-imds-v1"
+      },
+      "logging": {
+        "driver": "none"
+      },
+      "networks": [
+        "db_internal"
+      ],
+      "platform": "linux/amd64",
+      "pull_policy": "never",
+      "read_only": true,
+      "restart": "no",
+      "secrets": [
+        "redis_password"
+      ],
+      "security_opt": [
+        "no-new-privileges:true"
+      ],
+      "stop_grace_period": "70s",
+      "tmpfs": [
+        "/tmp:mode=1777",
+        "/data:mode=1777"
+      ],
+      "volumes": [
+        {
+          "bind": {
+            "create_host_path": false
+          },
+          "read_only": true,
+          "source": "${SANDBOX_ROOT:?Private sandbox directory required}/code/redis-entrypoint.sh",
+          "target": "/fixture/redis-entrypoint.sh",
+          "type": "bind"
+        }
+      ]
+    },
+    "s3-emulator": {
+      "cap_drop": [
+        "ALL"
+      ],
+      "entrypoint": [
+        "python",
+        "/fixture/moto_server.py"
+      ],
+      "environment": {
+        "MOTO_S3_CUSTOM_ENDPOINTS": "https://s3.sandbox.test:5000",
+        "PLATFORM_SANDBOX_PROJECT": "nc-s3-imds-test-${SANDBOX_ID:?16 lowercase hexadecimal characters required}",
+        "PLATFORM_SYNTHETIC_SANDBOX": "s3-imds-v1"
+      },
+      "image": "ghcr.io/getmoto/motoserver:5.1.22@sha256:117238c6e7e3b566387c4c74e6fb0b6fdc34a094920c2154cf06f11dc72d9f37",
+      "labels": {
+        "platform.capture.isolated": "true",
+        "platform.sandbox.kind": "s3-imds-v1"
+      },
+      "logging": {
+        "driver": "none"
+      },
+      "networks": {
+        "storage_internal": {
+          "aliases": [
+            "s3.sandbox.test",
+            "fixture-data.s3.sandbox.test"
+          ]
+        }
+      },
+      "platform": "linux/amd64",
+      "pull_policy": "never",
+      "read_only": true,
+      "restart": "no",
+      "security_opt": [
+        "no-new-privileges:true"
+      ],
+      "stop_grace_period": "70s",
+      "tmpfs": [
+        "/tmp:mode=1777"
+      ],
+      "user": "1000:1000",
+      "volumes": [
+        {
+          "bind": {
+            "create_host_path": false
+          },
+          "read_only": true,
+          "source": "${SANDBOX_ROOT:?Private sandbox directory required}/code/moto_server.py",
+          "target": "/fixture/moto_server.py",
+          "type": "bind"
+        },
+        {
+          "bind": {
+            "create_host_path": false
+          },
+          "read_only": true,
+          "source": "${SANDBOX_ROOT:?Private sandbox directory required}/tls/s3-emulator.crt",
+          "target": "/fixture/server.crt",
+          "type": "bind"
+        },
+        {
+          "bind": {
+            "create_host_path": false
+          },
+          "read_only": true,
+          "source": "${SANDBOX_ROOT:?Private sandbox directory required}/tls/s3-emulator.key",
+          "target": "/fixture/server.key",
+          "type": "bind"
+        }
+      ]
+    }
+  },
+  "volumes": {
+    "nextcloud_html": {
+      "driver": "local",
+      "labels": {
+        "platform.capture.isolated": "true",
+        "platform.sandbox.kind": "s3-imds-v1"
+      }
+    },
+    "postgres_data": {
+      "driver": "local",
+      "labels": {
+        "platform.capture.isolated": "true",
+        "platform.sandbox.kind": "s3-imds-v1"
+      }
+    }
+  }
+}

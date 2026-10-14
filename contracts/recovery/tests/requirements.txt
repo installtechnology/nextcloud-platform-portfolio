@@ -1,0 +1,3 @@
+# Apenas testes locais do contrato; não instalado no host ou workflow de deploy.
+jsonschema==4.23.0
+rfc3339-validator==0.1.4

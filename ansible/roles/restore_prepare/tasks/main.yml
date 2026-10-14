@@ -1,0 +1,143 @@
+---
+- name: Install Python venv prerequisite only on the verified destination
+  ansible.builtin.apt:
+    name: python3.12-venv
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Prepare private destination tooling and staging
+  ansible.builtin.file:
+    path: '{{ item }}'
+    state: directory
+    owner: root
+    group: root
+    mode: '0700'
+  loop:
+    - /etc/nextcloud-restore
+    - /etc/nextcloud-recovery
+    - /var/lib/nextcloud-recovery
+    - /run/nextcloud-recovery
+    - /var/lib/nextcloud-restore
+    - /usr/local/lib/nextcloud-recovery
+    - /usr/local/lib/nextcloud-recovery/repository
+
+- name: Copy only the reviewed Git export for restore tooling
+  ansible.builtin.copy:
+    src: '{{ restore_reviewed_code_archive }}'
+    dest: /usr/local/lib/nextcloud-recovery/reviewed-export.tar
+    owner: root
+    group: root
+    mode: '0600'
+
+- name: Read the transferred reviewed archive SHA256
+  ansible.builtin.stat:
+    path: /usr/local/lib/nextcloud-recovery/reviewed-export.tar
+    checksum_algorithm: sha256
+  register: restore_transferred_archive
+
+- name: Reject changed archive bytes before extraction
+  ansible.builtin.assert:
+    that:
+      - restore_transferred_archive.stat.isreg
+      - not restore_transferred_archive.stat.islnk
+      - restore_transferred_archive.stat.checksum == restore_reviewed_code_sha256
+    fail_msg: RESTORE_CODE_TRANSFER_INTEGRITY_FAILED
+
+- name: Extract only the verified reviewed tooling archive
+  ansible.builtin.unarchive:
+    src: /usr/local/lib/nextcloud-recovery/reviewed-export.tar
+    dest: /usr/local/lib/nextcloud-recovery/repository/
+    remote_src: true
+    owner: root
+    group: root
+
+- name: Copy the approved offline dependency wheelhouse
+  ansible.builtin.copy:
+    src: '{{ restore_reviewed_wheelhouse }}/'
+    dest: /usr/local/lib/nextcloud-recovery/wheels/
+    owner: root
+    group: root
+    mode: '0600'
+    directory_mode: '0700'
+
+- name: Prepare the private Python environment without network package installation
+  ansible.builtin.command:
+    argv: [/usr/bin/python3.12, -m, scripts.backup.operational.host_setup]
+    chdir: /usr/local/lib/nextcloud-recovery/repository
+    creates: /usr/local/lib/nextcloud-recovery/venv/bin/python
+
+- name: Verify the pinned dependency versions and all wheel bytes again
+  ansible.builtin.command:
+    argv:
+      - /usr/local/lib/nextcloud-recovery/venv/bin/python
+      - -c
+      - "from scripts.backup.operational.sdk import dependencies; from scripts.backup.operational.dependencies import audit; from scripts.backup.orchestration.linux.prepare_posix import verify_wheel; from pathlib import Path; dependencies(); records=audit(); root=Path('/usr/local/lib/nextcloud-recovery/wheels'); assert {p.name for p in root.iterdir()}=={r['filename'] for r in records}; [verify_wheel(root/r['filename'],r) for r in records]"
+    chdir: /usr/local/lib/nextcloud-recovery/repository
+  changed_when: false
+
+- name: Verify restore worker imports with the host runtime dependencies
+  ansible.builtin.command:
+    argv:
+      - /usr/local/lib/nextcloud-recovery/venv/bin/python
+      - -c
+      - "import importlib.metadata; import scripts.restore.host_worker; assert importlib.metadata.version('PyYAML') == '6.0.3'; print('RESTORE_WORKER_IMPORT_VERIFIED')"
+    chdir: /usr/local/lib/nextcloud-recovery/repository
+  changed_when: false
+
+- name: Verify shared lease configuration against the destination binding
+  ansible.builtin.command:
+    argv:
+      - /usr/local/lib/nextcloud-recovery/venv/bin/python
+      - -c
+      - "from scripts.backup.json_input import parse_json; from scripts.backup.limits import Limits; from scripts.restore.host_scope import validate_shared_preparation; from scripts.backup.operational.runtime_config import load; import sys; p=parse_json(sys.stdin.buffer.read(131073),Limits(json_bytes=131072)); g=p['guard'] if p['provided'] else load(); validate_shared_preparation(p['host'],g); print('RESTORE_SHARED_GUARD_BINDING_VERIFIED')"
+    stdin: '{{ {"host": restore_host_configuration, "provided": restore_shared_guard_configuration is defined, "guard": restore_shared_guard_configuration | default(none)} | to_json }}'
+    chdir: /usr/local/lib/nextcloud-recovery/repository
+  changed_when: false
+  no_log: true
+
+- name: Install unchanged PR7 lease binding without enabling backup dispatchers
+  ansible.builtin.copy:
+    content: '{{ restore_shared_guard_configuration | to_json }}'
+    dest: /etc/nextcloud-recovery/config.json
+    owner: root
+    group: root
+    mode: '0600'
+  no_log: true
+  when: restore_shared_guard_configuration is defined
+
+- name: Install private target binding without credentials
+  ansible.builtin.copy:
+    content: '{{ restore_host_configuration | to_json }}'
+    dest: /etc/nextcloud-restore/config.json
+    owner: root
+    group: root
+    mode: '0600'
+  no_log: true
+
+- name: Validate the installed host binding without restoring or starting the application
+  ansible.builtin.command:
+    argv:
+      - /usr/local/lib/nextcloud-recovery/venv/bin/python
+      - -c
+      - "from scripts.restore.host_scope import load; load(); print('RESTORE_HOST_BINDING_VERIFIED')"
+    chdir: /usr/local/lib/nextcloud-recovery/repository
+  changed_when: false
+
+- name: Record the reviewed public code revision
+  ansible.builtin.copy:
+    content: '{{ restore_reviewed_commit }}'
+    dest: /etc/nextcloud-restore/reviewed-commit
+    owner: root
+    group: root
+    mode: '0600'
+
+- name: Prepare only the three pinned application images on the verified empty target
+  ansible.builtin.command:
+    argv:
+      - /usr/local/lib/nextcloud-recovery/venv/bin/python
+      - -m
+      - scripts.restore.prepare_images
+    chdir: /usr/local/lib/nextcloud-recovery/repository
+  register: restore_prepared_images
+  changed_when: "'RESTORE_PINNED_IMAGES_PREPARED' in restore_prepared_images.stdout"

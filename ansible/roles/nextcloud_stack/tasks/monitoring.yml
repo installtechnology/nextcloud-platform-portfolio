@@ -1,0 +1,74 @@
+---
+- name: Instalar dependência Python para consultas locais ao Docker API
+  ansible.builtin.apt:
+    name: python3-requests
+    state: present
+    update_cache: true
+    cache_valid_time: "{{ common_apt_cache_valid_time }}"
+    lock_timeout: 120
+
+- name: Verificar diretório de logs Docker existente
+  ansible.builtin.stat:
+    path: "{{ nextcloud_stack_docker_log_directory }}"
+  register: nextcloud_stack_docker_logs
+
+- name: Confirmar diretório de logs rootful para mount somente leitura
+  ansible.builtin.assert:
+    that:
+      - nextcloud_stack_docker_logs.stat.isdir | default(false)
+      - nextcloud_stack_docker_logs.stat.uid == 0
+    fail_msg: Informe o diretório containers do data-root Docker rootful; não criar diretório vazio no lugar dos logs.
+  when: not ansible_check_mode
+
+- name: Criar diretórios de configuração legíveis pelos serviços
+  ansible.builtin.file:
+    path: "{{ common_application_root }}/monitoring/{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+  loop:
+    - prometheus
+    - prometheus/rules
+    - grafana
+    - grafana/provisioning
+    - grafana/provisioning/datasources
+    - grafana/provisioning/dashboards
+    - grafana/dashboards
+    - loki
+    - alloy
+
+- name: Copiar configurações versionadas de métricas logs e dashboards
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/../../monitoring/{{ item }}"
+    dest: "{{ common_application_root }}/monitoring/{{ item }}"
+    owner: root
+    group: root
+    mode: '0644'
+  loop:
+    - prometheus/prometheus.yml
+    - prometheus/rules/alerts.yml
+    - grafana/provisioning/datasources/datasources.yml
+    - grafana/provisioning/dashboards/provider.yml
+    - grafana/dashboards/platform-overview.json
+    - loki/loki.yml
+    - alloy/config.alloy
+  register: nextcloud_stack_monitoring_files
+
+- name: Renderizar Host autorizado do probe sem alterar Nextcloud
+  ansible.builtin.template:
+    src: "{{ playbook_dir }}/../../monitoring/alloy/blackbox.yml.j2"
+    dest: "{{ common_application_root }}/monitoring/alloy/blackbox.yml"
+    owner: root
+    group: root
+    mode: '0644'
+  register: nextcloud_stack_monitoring_probe
+
+# Same bind path does not force Compose recreation after a file content change.
+# Restart only services with changed config; first up already reads current files.
+- name: Marcar serviços que precisam reler arquivos alterados
+  ansible.builtin.set_fact:
+    nextcloud_stack_monitoring_restart: >-
+      {{ (nextcloud_stack_monitoring_files.results | selectattr('changed') | map(attribute='item')
+          | map('split', '/') | map('first') | list
+          + (['alloy'] if nextcloud_stack_monitoring_probe.changed else [])) | unique | list }}

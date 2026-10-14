@@ -1,0 +1,81 @@
+name: Restore platform (manual)
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Protected GitHub Environment with dedicated restore identity
+        type: string
+        required: true
+        default: lab
+      selection:
+        description: Latest valid complete set or one exact backup ID
+        type: choice
+        options: [specific, latest_valid]
+        default: specific
+        required: true
+      target_selection:
+        description: Configured target or unique new host prepared by deploy (no stale-ID fallback)
+        type: choice
+        options: [configured, discover_prepared]
+        default: configured
+        required: true
+      backup_id:
+        description: Required for specific; leave empty for latest_valid
+        type: string
+        required: false
+      confirmation:
+        description: RESTORE; requires separately approved destination/IAM/host activation
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  restore:
+    if: github.ref == 'refs/heads/main' && inputs.confirmation == 'RESTORE'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    environment: ${{ inputs.environment }}
+    permissions:
+      contents: read
+      id-token: write
+    concurrency:
+      group: aws-${{ vars.AWS_ACCOUNT_ID }}-${{ vars.PROJECT_NAME }}-${{ inputs.environment }}
+      cancel-in-progress: false
+    env:
+      AWS_EC2_METADATA_DISABLED: 'true'
+      AWS_ACCOUNT_ID: ${{ vars.AWS_ACCOUNT_ID }}
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      PROJECT_NAME: ${{ vars.PROJECT_NAME }}
+      RESTORE_GITHUB_ENVIRONMENT: ${{ inputs.environment }}
+      RESTORE_RESOURCE_ENVIRONMENT: ${{ vars.RESTORE_RESOURCE_ENVIRONMENT }}
+      RESTORE_ROLE_ARN: ${{ vars.RESTORE_ROLE_ARN }}
+      RESTORE_INSTANCE_ID: ${{ vars.RESTORE_INSTANCE_ID }}
+      RESTORE_SOURCE_INSTANCE_ID: ${{ vars.RESTORE_SOURCE_INSTANCE_ID }}
+      RESTORE_KNOWN_HOSTS: ${{ vars.RESTORE_KNOWN_HOSTS }}
+      RESTORE_SELECTION: ${{ inputs.selection }}
+      RESTORE_TARGET_SELECTION: ${{ inputs.target_selection }}
+      RESTORE_BACKUP_ID: ${{ inputs.backup_id }}
+      CONFIRMATION: ${{ inputs.confirmation }}
+    steps:
+      - name: Checkout exact authorized source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+          ref: ${{ github.sha }}
+      - name: Prepare reviewed dependencies in private venv
+        run: /usr/bin/python3.12 -m scripts.backup.operational.dependencies prepare "$RUNNER_TEMP/nextcloud-operational"
+      - name: Reject invalid restore context before OIDC or host access
+        run: '"$RUNNER_TEMP/nextcloud-operational/venv/bin/python" -c "from scripts.restore.runner import configuration; configuration(); print(''RESTORE_RUNNER_CONTEXT_VERIFIED'')"'
+      - name: Prepare verified portable SSM plugin
+        env:
+          SSM_PLUGIN_PACKAGE_SHA256: ${{ vars.SSM_PLUGIN_PACKAGE_SHA256 }}
+        run: /usr/bin/python3.12 -m scripts.backup.operational.plugin
+      - name: Execute one supervised restore on the dedicated destination
+        env:
+          RESTORE_SSH_PRIVATE_KEY: ${{ secrets.RESTORE_SSH_PRIVATE_KEY }}
+        run: '"$RUNNER_TEMP/nextcloud-operational/venv/bin/python" -m scripts.restore.runner'
+# No retries, plaintext downloads, GitHub artifacts, Terraform, or source mutations.
+# Requires a separately installed dispatcher/guard and dedicated OIDC role.

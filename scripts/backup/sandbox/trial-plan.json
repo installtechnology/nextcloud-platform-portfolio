@@ -1,0 +1,103 @@
+{
+  "schema": "sandbox-test-plan-v1",
+  "operational_allowed": false,
+  "backup_complete": false,
+  "cases": [
+    {
+      "id": "TLS_IMDS",
+      "status": "not_executed",
+      "requires": "separate VM/container execution authorization and continuously observed fencing",
+      "check": "Certificate SAN/CA positive and negative; IMDSv1/token TTL rejection; no link-local fallback"
+    },
+    {
+      "id": "IMAGE_IDENTITY",
+      "status": "not_executed",
+      "requires": "separate VM/container execution authorization and continuously observed fencing",
+      "check": "Inspect all four image references, actual AMD64 IDs, bundled SDK and Redis pin"
+    },
+    {
+      "id": "NEW_INSTALL",
+      "status": "not_executed",
+      "requires": "separate VM/container execution authorization and continuously observed fencing",
+      "check": "Create only a synthetic versioned Moto bucket; install via original guards and sandbox endpoint adapter"
+    },
+    {
+      "id": "FILE_ROUNDTRIP",
+      "status": "not_executed",
+      "requires": "separate VM/container execution authorization and continuously observed fencing",
+      "check": "Synthetic WebDAV upload/download, checksum and exact S3 VersionId observation; no production data"
+    },
+    {
+      "id": "VERSION_PAGINATION",
+      "status": "not_executed",
+      "requires": "separate VM/container execution authorization and continuously observed fencing",
+      "check": "HTTP MaxKeys 1/2/3/1000, multiple versions, current/old delete markers, Unicode and opaque IDs"
+    },
+    {
+      "id": "MAINTENANCE_OFF",
+      "status": "not_executed",
+      "requires": "separate VM/container execution authorization and continuously observed fencing",
+      "check": "Capture owns maintenance transition; fence new requests; drain all known writers before dump"
+    },
+    {
+      "id": "MAINTENANCE_ON",
+      "status": "not_executed",
+      "requires": "separate VM/container execution authorization and continuously observed fencing",
+      "check": "Pre-existing maintenance remains enabled; capture never assumes ownership"
+    },
+    {
+      "id": "ACTIVE_REQUEST_CRON",
+      "status": "not_executed",
+      "requires": "separate VM/container execution authorization and continuously observed fencing",
+      "check": "Hold request and background job; no capture before their successful drain"
+    },
+    {
+      "id": "EXTERNAL_WRITER",
+      "status": "not_executed",
+      "requires": "separate VM/container execution authorization and continuously observed fencing",
+      "check": "Inject CLI/SQL/S3 writer, unknown network or volume consumer; reject the consistency window"
+    },
+    {
+      "id": "PG_CONFIG_IDENTITY",
+      "status": "not_executed",
+      "requires": "separate VM/container execution authorization and continuously observed fencing",
+      "check": "PG17 custom dump and globals/roles strategy; original config/identity preserved; no restore claim"
+    },
+    {
+      "id": "JOURNAL_ENOSPC",
+      "status": "not_executed",
+      "requires": "separate VM/container execution authorization and continuously observed fencing",
+      "check": "Partial dump, full disk and atomic journal failures; candidate rejected; controlled recovery"
+    },
+    {
+      "id": "SIGTERM_TIMEOUT",
+      "status": "not_executed",
+      "requires": "separate VM/container execution authorization and continuously observed fencing",
+      "check": "Controller cancellation and timeout; identify surviving Docker exec; owned maintenance recovery only"
+    },
+    {
+      "id": "SIGKILL_ORPHAN",
+      "status": "not_executed",
+      "requires": "separate VM/container execution authorization and continuously observed fencing",
+      "check": "Kill controller and detect daemon-side subprocess; prohibit deploy/maintenance release while ambiguous"
+    },
+    {
+      "id": "REBOOT_SYSTEMD",
+      "status": "not_executed",
+      "requires": "separate VM/container execution authorization and continuously observed fencing",
+      "check": "Exclusive disposable VM reboot and systemd supervision; lost Moto versions invalidate the set"
+    },
+    {
+      "id": "COHERENT_WINDOW",
+      "status": "not_executed",
+      "requires": "separate VM/container execution authorization and continuously observed fencing",
+      "check": "PG/config/identity/inventory IDs, observations and fencing evidence all same window; equal lists insufficient"
+    },
+    {
+      "id": "INDEPENDENT_RESTORE",
+      "status": "not_executed",
+      "requires": "separate VM/container execution authorization and continuously observed fencing",
+      "check": "Separate synthetic destination; verify application functionality and identity; never restore source"
+    }
+  ]
+}

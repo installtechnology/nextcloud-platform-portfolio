@@ -1,0 +1,46 @@
+{
+  "schema_version": 2,
+  "backup_id": "20261009T120000Z-11111111-2222-4333-8444-555555555555",
+  "manifest_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+  "source": {
+    "account_id": "000000000000",
+    "project": "fixture-platform",
+    "environment": "fixture",
+    "installation_identity_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "data_bucket": "fixture-platform-data",
+    "region": "us-east-1"
+  },
+  "started_at": "2026-10-10T12:00:00Z",
+  "finished_at": "2026-10-10T12:30:00Z",
+  "target": {
+    "isolation_id": "fixture-restore",
+    "data_bucket": "fixture-platform-restore",
+    "database_identity": "fixture-restore-db",
+    "original_environment_modified": false,
+    "storage_identity_remapping_explicitly_approved": true
+  },
+  "compatibility_verified": true,
+  "checks": {
+    "decryption": true,
+    "postgres_restore": true,
+    "installed": true,
+    "storage_guard": true,
+    "object_version_mapping": true,
+    "file_content_hashes": true,
+    "login": true,
+    "postgres_redis_integration": true,
+    "configuration_apps": true,
+    "interrupted_restore_resumed": true,
+    "second_run_no_reinstallation": true
+  },
+  "result": "functional_restore_verified",
+  "report": {
+    "key": "evidence/20261009T120000Z-11111111-2222-4333-8444-555555555555/restore-report.json",
+    "version_id": "fixture-report-version",
+    "sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+    "encryption": {
+      "method": "SSE-S3",
+      "algorithm": "AES256"
+    }
+  }
+}

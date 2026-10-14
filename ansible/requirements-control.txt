@@ -1,0 +1,3 @@
+# Controlador Linux/macOS; não instalar Ansible no host Windows nativo.
+ansible-core>=2.19,<2.20
+ansible-lint>=25,<26

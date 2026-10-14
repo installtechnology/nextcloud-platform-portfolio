@@ -1,0 +1,96 @@
+---
+- name: Reiniciar apenas observabilidade com configuração alterada
+  community.docker.docker_compose_v2:
+    project_src: "{{ nextcloud_stack_directory }}"
+    project_name: "{{ nextcloud_stack_project }}"
+    services: "{{ nextcloud_stack_monitoring_restart }}"
+    state: restarted
+    dependencies: false
+  when: nextcloud_stack_monitoring_restart | length > 0
+  no_log: true
+
+- name: Consultar containers locais para validar readiness pela bridge
+  community.docker.docker_container_info:
+    name: "{{ nextcloud_stack_project }}-{{ item.service }}-1"
+  loop:
+    - {service: prometheus, port: 9090, path: /-/ready}
+    - {service: loki, port: 3100, path: /ready}
+    - {service: alloy, port: 12345, path: /-/ready}
+    - {service: node-exporter, port: 9100, path: /metrics}
+  register: nextcloud_stack_monitoring_containers
+
+- name: Confirmar containers da observabilidade existentes
+  ansible.builtin.assert:
+    that:
+      - item.exists
+      - item.container.State.Running
+  loop: "{{ nextcloud_stack_monitoring_containers.results }}"
+  loop_control:
+    label: "{{ item.item.service }}"
+
+- name: Verificar endpoints internos sem publicar portas
+  ansible.builtin.uri:
+    url: "http://{{ item.container.NetworkSettings.Networks[nextcloud_stack_project + '_observability'].IPAddress }}:{{ item.item.port }}{{ item.item.path }}"
+    status_code: 200
+    use_proxy: false
+  loop: "{{ nextcloud_stack_monitoring_containers.results }}"
+  loop_control:
+    label: "{{ item.item.service }}"
+  register: nextcloud_stack_monitoring_ready
+  retries: 30
+  delay: 2
+  until: nextcloud_stack_monitoring_ready.status | default(0) == 200
+
+- name: Consultar publicação efetiva IPv4 do Grafana
+  community.docker.docker_container_info:
+    name: "{{ nextcloud_stack_project }}-grafana-1"
+  register: nextcloud_stack_grafana_container
+  no_log: true
+
+- name: Confirmar publicação IPv4 sem binding IPv6
+  ansible.builtin.assert:
+    that:
+      - nextcloud_stack_grafana_container.exists
+      - >-
+        nextcloud_stack_grafana_container.container.NetworkSettings.Ports['3000/tcp'] ==
+        [{'HostIp': '0.0.0.0', 'HostPort': nextcloud_stack_grafana_http_port | string}]
+    fail_msg: Grafana deve publicar TCP 3000 em IPv4; verificar bridge grafana_access e binding efetivo.
+
+- name: Verificar banco interno do Grafana no host EC2
+  ansible.builtin.uri:
+    url: "http://127.0.0.1:{{ nextcloud_stack_grafana_http_port }}/api/health"
+    return_content: true
+    use_proxy: false
+  register: nextcloud_stack_grafana_health
+  retries: 30
+  delay: 2
+  until: nextcloud_stack_grafana_health.json.database | default('') == 'ok'
+
+- name: Confirmar datasources provisionados e conectividade efetiva
+  ansible.builtin.uri:
+    url: "http://127.0.0.1:{{ nextcloud_stack_grafana_http_port }}/api/datasources/uid/{{ item }}/health"
+    url_username: "{{ nextcloud_stack_grafana_admin_user }}"
+    url_password: "{{ nextcloud_stack_grafana_admin_password }}"
+    force_basic_auth: true
+    return_content: true
+    use_proxy: false
+  loop: [platform-prometheus, platform-loki]
+  register: nextcloud_stack_datasource_health
+  retries: 15
+  delay: 2
+  until: nextcloud_stack_datasource_health.json.status | default('') == 'OK'
+  no_log: true
+
+- name: Confirmar dashboard provisionado sem configuração pela interface
+  ansible.builtin.uri:
+    url: "http://127.0.0.1:{{ nextcloud_stack_grafana_http_port }}/api/dashboards/uid/platform-overview"
+    url_username: "{{ nextcloud_stack_grafana_admin_user }}"
+    url_password: "{{ nextcloud_stack_grafana_admin_password }}"
+    force_basic_auth: true
+    return_content: true
+    use_proxy: false
+  register: nextcloud_stack_dashboard
+  retries: 15
+  delay: 2
+  until: nextcloud_stack_dashboard.json.dashboard.uid | default('') == 'platform-overview'
+  no_log: true

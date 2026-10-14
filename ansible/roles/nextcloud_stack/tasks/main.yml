@@ -1,0 +1,125 @@
+---
+- name: Validar parâmetros não secretos da aplicação
+  ansible.builtin.assert:
+    that:
+      - nextcloud_stack_grafana_admin_user is match('^[A-Za-z0-9][A-Za-z0-9_.@-]+$')
+      # Must match the Terraform rule and browser URL; changing it requires all layers.
+      - nextcloud_stack_grafana_http_port | int == 3000
+      - nextcloud_stack_grafana_http_port | int != nextcloud_stack_http_port | int
+      - nextcloud_stack_docker_log_directory is match('^/[A-Za-z0-9_/-]+/containers$')
+      - nextcloud_stack_s3_bucket is match('^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$')
+      - nextcloud_stack_s3_region is match('^[a-z]{2}(-[a-z]+)+-[0-9]+$')
+      - nextcloud_stack_project is match('^[a-z][a-z0-9_-]+$')
+      - nextcloud_stack_postgres_db is match('^[a-z][a-z0-9_]{1,62}$')
+      - nextcloud_stack_postgres_user is match('^[a-z][a-z0-9_]{1,62}$')
+      - nextcloud_stack_postgres_user != 'postgres'
+      - nextcloud_stack_admin_user is match('^[A-Za-z0-9][A-Za-z0-9_.@-]+$')
+      - nextcloud_stack_trusted_domains is match('^[A-Za-z0-9.:-]+( [A-Za-z0-9.:-]+)*$')
+      - nextcloud_stack_bind_address is match('^[0-9.]+$')
+      - nextcloud_stack_http_port | int >= 1
+      - nextcloud_stack_http_port | int <= 65535
+      - nextcloud_stack_directory == common_application_root + '/docker'
+    fail_msg: Informe nomes/domínios/IP válidos e diretório Docker da plataforma.
+
+- name: Validar secrets externos sem exibir conteúdo
+  ansible.builtin.assert:
+    that:
+      - item.value is match('^[A-Za-z0-9_-]{32,256}$')
+      - not item.value.startswith('REPLACE')
+      - nextcloud_stack_postgres_admin_password != nextcloud_stack_postgres_password
+  loop: "{{ nextcloud_stack_secrets }}"
+  no_log: true
+
+- name: Criar diretório isolado de secrets no host
+  ansible.builtin.file:
+    path: "{{ nextcloud_stack_directory }}/secrets"
+    state: directory
+    owner: root
+    group: root
+    mode: '0700'
+
+- name: Verificar secrets já existentes para impedir rotação acidental
+  ansible.builtin.stat:
+    path: "{{ nextcloud_stack_directory }}/secrets/{{ item.name }}"
+    checksum_algorithm: sha256
+  loop: "{{ nextcloud_stack_secrets }}"
+  register: nextcloud_stack_existing_secrets
+  no_log: true
+
+- name: Abortar se credencial fornecida divergir da instalação existente
+  ansible.builtin.assert:
+    that:
+      - not item.stat.exists or item.stat.checksum == item.item.value | hash('sha256')
+    fail_msg: Rotação de credenciais exige procedimento explícito; não substituir secrets de volumes existentes.
+  loop: "{{ nextcloud_stack_existing_secrets.results }}"
+  no_log: true
+
+- name: Gravar secrets para os containers autorizados
+  ansible.builtin.copy:
+    content: "{{ item.value }}"
+    dest: "{{ nextcloud_stack_directory }}/secrets/{{ item.name }}"
+    owner: root
+    group: root
+    mode: '0444' # Diretório host 0700; arquivo deve ser legível pelo www-data/redis nos mounts.
+  loop: "{{ nextcloud_stack_secrets }}"
+  no_log: true
+
+- name: Copiar configuração única da stack e probes
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/../../docker/{{ item }}"
+    dest: "{{ nextcloud_stack_directory }}/{{ item }}"
+    owner: root
+    group: root
+    mode: "{{ '0755' if item.endswith('.sh') else '0644' }}"
+  loop:
+    - compose.yml
+    - postgres-init.sh
+    - redis-entrypoint.sh
+    - platform.config.php
+    - storage-guard.php
+    - install-nextcloud.php
+    - configure-nextcloud.sh
+    - nextcloud-healthcheck.php
+    - nextcloud-integration.php
+
+- name: Preparar configurações de observabilidade
+  ansible.builtin.import_tasks: monitoring.yml
+
+- name: Renderizar configuração runtime sem versionar env real
+  ansible.builtin.template:
+    src: env.j2
+    dest: "{{ nextcloud_stack_directory }}/.env"
+    owner: root
+    group: root
+    mode: '0600'
+  no_log: true
+
+- name: Obter imagens oficiais fixadas quando ausentes
+  community.docker.docker_compose_v2_pull:
+    project_src: "{{ nextcloud_stack_directory }}"
+    project_name: "{{ nextcloud_stack_project }}"
+    policy: missing
+  when: not ansible_check_mode
+
+- name: Subir stack com instalação no hook antes dos healthchecks
+  community.docker.docker_compose_v2:
+    project_src: "{{ nextcloud_stack_directory }}"
+    project_name: "{{ nextcloud_stack_project }}"
+    state: present
+    pull: never
+    build: never
+    recreate: auto
+    remove_orphans: false
+    remove_volumes: false
+    wait: true
+    wait_timeout: "{{ nextcloud_stack_wait_timeout }}"
+  no_log: true
+  when: not ansible_check_mode
+
+- name: Validar instalação e comunicação
+  ansible.builtin.import_tasks: validate.yml
+  when: not ansible_check_mode
+
+- name: Validar observabilidade sem portas públicas adicionais
+  ansible.builtin.import_tasks: validate-monitoring.yml
+  when: not ansible_check_mode

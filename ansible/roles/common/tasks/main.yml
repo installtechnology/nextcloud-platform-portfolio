@@ -1,0 +1,57 @@
+---
+- name: Validar parâmetros de usuário e diretório
+  ansible.builtin.assert:
+    that:
+      - common_operational_user | length > 0
+      - common_operational_user != 'root'
+      - common_application_root is match('^/opt/[A-Za-z0-9_-]+$')
+      - common_platform_group is match('^[a-z_][a-z0-9_-]*$')
+    fail_msg: Use usuário operacional existente e diretório próprio diretamente sob /opt.
+
+- name: Confirmar que o usuário operacional já existe
+  ansible.builtin.getent:
+    database: passwd
+    key: "{{ common_operational_user }}"
+
+- name: Atualizar cache APT e instalar pacotes básicos
+  ansible.builtin.apt:
+    name: "{{ common_base_packages }}"
+    state: present
+    update_cache: true
+    cache_valid_time: "{{ common_apt_cache_valid_time }}"
+    lock_timeout: 120
+
+- name: Criar grupo da plataforma
+  ansible.builtin.group:
+    name: "{{ common_platform_group }}"
+    system: true
+    state: present
+
+- name: Adicionar usuário ao grupo da plataforma preservando grupos existentes
+  ansible.builtin.user:
+    name: "{{ common_operational_user }}"
+    groups: "{{ common_platform_group }}"
+    append: true
+
+- name: Criar raiz da aplicação
+  ansible.builtin.file:
+    path: "{{ common_application_root }}"
+    state: directory
+    owner: root
+    group: "{{ common_platform_group }}"
+    mode: '0750'
+
+- name: Validar nomes dos subdiretórios
+  ansible.builtin.assert:
+    that:
+      - item is match('^[A-Za-z0-9_-]+$')
+  loop: "{{ common_application_directories }}"
+
+- name: Preparar subdiretórios sem volumes ou lógica de persistência
+  ansible.builtin.file:
+    path: "{{ common_application_root }}/{{ item }}"
+    state: directory
+    owner: root
+    group: "{{ common_platform_group }}"
+    mode: '0750'
+  loop: "{{ common_application_directories }}"

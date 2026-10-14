@@ -1,0 +1,17 @@
+# TEMPLATE INATIVO: não copiar para systemd nem iniciar sem ensaio/aprovação.
+[Unit]
+Description=PR3 isolated local capture candidate
+
+[Service]
+Type=oneshot
+WorkingDirectory={{ recovery_capture_directory }}/tooling/repository
+Environment=AWS_EC2_METADATA_DISABLED=true
+UMask=0077
+ExecStart=/usr/bin/python3 -m scripts.backup.capture start --isolated-project {{ recovery_capture_project }} --fixture-root {{ recovery_capture_directory }}/fixture --staging {{ recovery_capture_directory }}/staging
+ExecStopPost=/usr/bin/python3 -m scripts.backup.capture recover --isolated-project {{ recovery_capture_project }} --fixture-root {{ recovery_capture_directory }}/fixture --staging {{ recovery_capture_directory }}/staging
+TimeoutStartSec=1800
+TimeoutStopSec=300
+KillMode=control-group
+Restart=no
+StandardOutput=journal
+StandardError=null

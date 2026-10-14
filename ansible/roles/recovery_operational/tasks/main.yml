@@ -1,0 +1,144 @@
+---
+- name: Require explicit installation authorization and reviewed private inputs
+  ansible.builtin.assert:
+    that:
+      - recovery_install_confirmation == 'INSTALL_RECOVERY_GUARDS'
+      - ansible_distribution == 'Ubuntu'
+      - ansible_distribution_version == '24.04'
+      - recovery_host_configuration is mapping
+      - "recovery_dedicated_ssh_public_key is match('^ssh-ed25519 [A-Za-z0-9+/=]+(?: .*)?$')"
+      - recovery_reviewed_wheelhouse is defined
+      - recovery_reviewed_code_export is defined
+    quiet: true
+  no_log: true
+
+- name: Prepare root-only directories
+  ansible.builtin.file:
+    path: '{{ item }}'
+    state: directory
+    owner: root
+    group: root
+    mode: '0700'
+  loop:
+    - /etc/nextcloud-recovery
+    - /var/lib/nextcloud-recovery
+    - /run/nextcloud-recovery
+    - /usr/local/lib/nextcloud-recovery
+    - /usr/local/lib/nextcloud-recovery/repository
+
+- name: Copy reviewed code only
+  ansible.builtin.copy:
+    src: '{{ recovery_reviewed_code_export }}/{{ item }}/'
+    dest: '/usr/local/lib/nextcloud-recovery/repository/{{ item }}/'
+    owner: root
+    group: root
+    mode: '0600'
+    directory_mode: '0700'
+  loop: [scripts/backup, contracts/recovery]
+
+- name: Allow container UID to read only the mounted sanitized PHP collector
+  ansible.builtin.file:
+    path: /usr/local/lib/nextcloud-recovery/repository/scripts/backup/operational/read-state.php
+    owner: root
+    group: root
+    mode: '0644'
+  # Host ancestors remain 0700. This file contains code only, never credentials.
+  # The network-none helper reads its individual read-only bind as www-data.
+
+- name: Copy exact approved offline wheelhouse
+  ansible.builtin.copy:
+    src: '{{ recovery_reviewed_wheelhouse }}/'
+    dest: /usr/local/lib/nextcloud-recovery/wheels/
+    owner: root
+    group: root
+    mode: '0600'
+    directory_mode: '0700'
+
+- name: Install audited dependencies offline only
+  ansible.builtin.command:
+    argv: [/usr/bin/python3.12, -m, scripts.backup.operational.host_setup]
+    chdir: /usr/local/lib/nextcloud-recovery/repository
+  changed_when: true
+
+- name: Install root activation configuration (no secrets)
+  ansible.builtin.copy:
+    content: '{{ recovery_host_configuration | to_json }}'
+    dest: /etc/nextcloud-recovery/config.json
+    owner: root
+    group: root
+    mode: '0600'
+  no_log: true
+
+- name: Prepare fixed dispatcher parent
+  ansible.builtin.file:
+    path: /usr/local/libexec
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+
+- name: Install fixed dispatchers
+  ansible.builtin.copy:
+    src: '{{ playbook_dir }}/../../scripts/backup/operational/{{ item }}'
+    dest: '/usr/local/libexec/{{ item }}'
+    owner: root
+    group: root
+    mode: '0755'
+  loop: [nextcloud-recovery, nextcloud-recovery-ssh]
+
+- name: Inspect existing dedicated identity before modifying it
+  ansible.builtin.getent:
+    database: passwd
+    key: ncbackup
+    fail_key: false
+
+- name: Reject a privileged or unrelated existing identity
+  ansible.builtin.assert:
+    that:
+      - ansible_facts.getent_passwd.ncbackup == none or (ansible_facts.getent_passwd.ncbackup[1] | int >= 1000 and ansible_facts.getent_passwd.ncbackup[4] == '/home/ncbackup')
+    quiet: true
+
+- name: Prepare dedicated group explicitly
+  ansible.builtin.group:
+    name: ncbackup
+    state: present
+
+- name: Create restricted non-administrative SSH identity
+  ansible.builtin.user:
+    name: ncbackup
+    group: ncbackup
+    groups: ''
+    append: false
+    home: /home/ncbackup
+    create_home: true
+    shell: /bin/sh
+    password_lock: true
+
+- name: Prepare dedicated SSH directory
+  ansible.builtin.file:
+    path: /home/ncbackup/.ssh
+    state: directory
+    owner: ncbackup
+    group: ncbackup
+    mode: '0700'
+
+- name: Install exclusively the forced-command public key without another collection
+  ansible.builtin.copy:
+    content: 'restrict,command="/usr/local/libexec/nextcloud-recovery-ssh" {{ recovery_dedicated_ssh_public_key | trim }}'
+    dest: /home/ncbackup/.ssh/authorized_keys
+    owner: ncbackup
+    group: ncbackup
+    mode: '0600'
+  no_log: true
+
+- name: Permit only two reviewed root commands
+  ansible.builtin.copy:
+    content: |
+      Defaults:ncbackup env_reset,secure_path=/usr/bin:/bin
+      ncbackup ALL=(root) NOPASSWD: /usr/local/libexec/nextcloud-recovery lease, /usr/local/libexec/nextcloud-recovery backup
+    dest: /etc/sudoers.d/nextcloud-recovery
+    owner: root
+    group: root
+    mode: '0440'
+    validate: /usr/sbin/visudo -cf %s
+# No service activation, broker startup, maintenance, dump or AWS call.

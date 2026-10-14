@@ -1,0 +1,23 @@
+---
+- name: Install a single private creation receipt on the verified empty destination
+  hosts: platform
+  become: true
+  gather_facts: false
+  tasks:
+    - name: Verify the installed destination and code revision
+      ansible.builtin.command:
+        argv:
+          - /usr/local/lib/nextcloud-recovery/venv/bin/python
+          - -c
+          - "from scripts.restore.host_scope import load; from scripts.restore.prepare_identity import check_empty_files,check_empty_docker; h=load(); check_empty_files(h.config['deployment_root']); check_empty_docker(); print('CREATION_EMPTY_HOST_VERIFIED')"
+        chdir: /usr/local/lib/nextcloud-recovery/repository
+      changed_when: false
+    - name: Record the administrative creation receipt without overwriting prior evidence
+      ansible.builtin.command:
+        argv:
+          - /usr/local/lib/nextcloud-recovery/venv/bin/python
+          - -c
+          - "import sys,json; from pathlib import Path; from scripts.restore.private_files import write_new; from scripts.restore.host_scope import load; d=json.load(sys.stdin); assert d['host']==load().identity(); write_new(Path('/etc/nextcloud-restore/creation-receipt.json'),json.dumps(d).encode())"
+        stdin: '{{ creation_receipt | to_json }}'
+        chdir: /usr/local/lib/nextcloud-recovery/repository
+      no_log: true

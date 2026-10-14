@@ -1,0 +1,67 @@
+---
+- name: Consultar estado Nextcloud sem reinstalar
+  ansible.builtin.command:
+    argv:
+      - docker
+      - compose
+      - --project-name
+      - "{{ nextcloud_stack_project }}"
+      - exec
+      - -T
+      - --user
+      - www-data
+      - nextcloud
+      - php
+      - occ
+      - status
+      - --output=json
+    chdir: "{{ nextcloud_stack_directory }}"
+  register: nextcloud_stack_status
+  changed_when: false
+  failed_when: nextcloud_stack_status.rc != 0
+  no_log: true
+
+- name: Confirmar instalação ativa e sem upgrade pendente
+  ansible.builtin.assert:
+    that:
+      - (nextcloud_stack_status.stdout | from_json).installed | bool
+      - not (nextcloud_stack_status.stdout | from_json).maintenance | bool
+      - not (nextcloud_stack_status.stdout | from_json).needsDbUpgrade | bool
+  no_log: true
+
+- name: Verificar PostgreSQL Redis e configuração efetiva pelo Nextcloud
+  ansible.builtin.command:
+    argv:
+      - docker
+      - compose
+      - --project-name
+      - "{{ nextcloud_stack_project }}"
+      - exec
+      - -T
+      - --user
+      - www-data
+      - nextcloud
+      - php
+      - /opt/platform/integration.php
+    chdir: "{{ nextcloud_stack_directory }}"
+  register: nextcloud_stack_integration
+  changed_when: false
+  failed_when: nextcloud_stack_integration.rc != 0
+  no_log: true
+
+- name: Verificar disponibilidade HTTP no host
+  ansible.builtin.uri:
+    url: "http://127.0.0.1:{{ nextcloud_stack_http_port }}/status.php"
+    headers:
+      Host: "{{ nextcloud_stack_trusted_domains.split(' ')[0] }}"
+    return_content: true
+    status_code: 200
+  register: nextcloud_stack_http
+  when: nextcloud_stack_bind_address in ['0.0.0.0', '127.0.0.1']
+
+- name: Confirmar resposta HTTP de instância instalada
+  ansible.builtin.assert:
+    that:
+      - nextcloud_stack_http.json.installed | bool
+      - not nextcloud_stack_http.json.maintenance | bool
+  when: nextcloud_stack_bind_address in ['0.0.0.0', '127.0.0.1']

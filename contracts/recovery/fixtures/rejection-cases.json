@@ -1,0 +1,445 @@
+[
+  {
+    "name": "missing_database",
+    "document": "manifest",
+    "rejection_layer": "schema",
+    "op": "remove",
+    "path": "/artifacts/database",
+    "expected_validator": "required"
+  },
+  {
+    "name": "unverified_checksum",
+    "document": "manifest",
+    "rejection_layer": "schema",
+    "op": "replace",
+    "path": "/verification/ciphertext_checksums_verified_after_download",
+    "value": false,
+    "expected_validator": "const"
+  },
+  {
+    "name": "false_restore_claim",
+    "document": "manifest",
+    "rejection_layer": "schema",
+    "op": "replace",
+    "path": "/verification/restore_proven",
+    "value": true,
+    "expected_validator": "const"
+  },
+  {
+    "name": "independent_bucket_claim",
+    "document": "manifest",
+    "rejection_layer": "schema",
+    "op": "replace",
+    "path": "/dependencies/protects_against_data_bucket_loss",
+    "value": true,
+    "expected_validator": "const"
+  },
+  {
+    "name": "unknown_schema",
+    "document": "manifest",
+    "rejection_layer": "schema",
+    "op": "replace",
+    "path": "/schema_version",
+    "value": 2,
+    "expected_validator": "const"
+  },
+  {
+    "name": "unknown_secret_field",
+    "document": "manifest",
+    "rejection_layer": "schema",
+    "op": "add",
+    "path": "/password",
+    "value": "synthetic-forbidden",
+    "expected_validator": "additionalProperties"
+  },
+  {
+    "name": "null_version",
+    "document": "inventory",
+    "rejection_layer": "schema",
+    "op": "replace",
+    "path": "/objects/0/version_id",
+    "value": "null",
+    "expected_validator": "pattern"
+  },
+  {
+    "name": "unpaginated_inventory",
+    "document": "inventory",
+    "rejection_layer": "schema",
+    "op": "replace",
+    "path": "/listing_complete",
+    "value": false,
+    "expected_validator": "const"
+  },
+  {
+    "name": "incompatible_postgres",
+    "document": "manifest",
+    "rejection_layer": "schema",
+    "op": "replace",
+    "path": "/compatibility/postgres_major",
+    "value": 16,
+    "expected_validator": "const"
+  },
+  {
+    "name": "incompatible_nextcloud",
+    "document": "manifest",
+    "rejection_layer": "schema",
+    "op": "replace",
+    "path": "/compatibility/nextcloud_version",
+    "value": "35.0.0",
+    "expected_validator": "pattern"
+  },
+  {
+    "name": "undrained_requests",
+    "document": "manifest",
+    "rejection_layer": "schema",
+    "op": "replace",
+    "path": "/consistency/inflight_requests_drained",
+    "value": false,
+    "expected_validator": "const"
+  },
+  {
+    "name": "partial_restore",
+    "document": "evidence",
+    "rejection_layer": "schema",
+    "op": "replace",
+    "path": "/checks/login",
+    "value": false,
+    "expected_validator": "const"
+  },
+  {
+    "name": "original_modified",
+    "document": "evidence",
+    "rejection_layer": "schema",
+    "op": "replace",
+    "path": "/target/original_environment_modified",
+    "value": true,
+    "expected_validator": "const"
+  },
+  {
+    "name": "mixed_backup_id",
+    "document": "manifest",
+    "rejection_layer": "semantic",
+    "op": "replace",
+    "path": "/artifacts/database/backup_id",
+    "value": "20261009T120000Z-aaaaaaaa-2222-4333-8444-555555555555",
+    "expected_error": "MIXED_SET"
+  },
+  {
+    "name": "mixed_consistency",
+    "document": "manifest",
+    "rejection_layer": "semantic",
+    "op": "replace",
+    "path": "/artifacts/configuration/consistency_id",
+    "value": "other-capture",
+    "expected_error": "MIXED_SET"
+  },
+  {
+    "name": "mixed_source",
+    "document": "inventory",
+    "rejection_layer": "semantic",
+    "op": "replace",
+    "path": "/source/data_bucket",
+    "value": "fixture-other-data",
+    "expected_error": "MIXED_INVENTORY"
+  },
+  {
+    "name": "changed_inventory",
+    "document": "manifest",
+    "rejection_layer": "semantic",
+    "op": "replace",
+    "path": "/consistency/inventory_after_sha256",
+    "value": "0000000000000000000000000000000000000000000000000000000000000000",
+    "expected_error": "WRITERS_OR_INVENTORY_CHANGED"
+  },
+  {
+    "name": "wrong_count",
+    "document": "inventory",
+    "rejection_layer": "semantic",
+    "op": "replace",
+    "path": "/object_count",
+    "value": 2,
+    "expected_error": "OBJECT_COUNT"
+  },
+  {
+    "name": "visible_and_absent",
+    "document": "inventory",
+    "rejection_layer": "semantic",
+    "op": "replace",
+    "path": "/absent_current_keys/0",
+    "value": "urn:oid:fixture-1",
+    "expected_error": "VISIBLE_AND_ABSENT"
+  },
+  {
+    "name": "wrong_prefix",
+    "document": "manifest",
+    "rejection_layer": "semantic",
+    "op": "replace",
+    "path": "/artifacts/database/key",
+    "value": "backups/other/database.age",
+    "expected_error": "WRONG_PREFIX"
+  },
+  {
+    "name": "same_bucket",
+    "document": "manifest",
+    "rejection_layer": "semantic",
+    "op": "replace",
+    "path": "/artifacts/database/bucket",
+    "value": "fixture-platform-data",
+    "expected_error": "STORAGE_SEPARATION"
+  },
+  {
+    "name": "mixed_proof",
+    "document": "evidence",
+    "rejection_layer": "semantic",
+    "op": "replace",
+    "path": "/manifest_ciphertext_sha256",
+    "value": "0000000000000000000000000000000000000000000000000000000000000000",
+    "expected_error": "UNBOUND_RESTORE_EVIDENCE"
+  },
+  {
+    "name": "nonisolated_target",
+    "document": "evidence",
+    "rejection_layer": "semantic",
+    "op": "replace",
+    "path": "/target/data_bucket",
+    "value": "fixture-platform-data",
+    "expected_error": "NONISOLATED_RESTORE"
+  },
+  {
+    "name": "invalid_time_order",
+    "document": "manifest",
+    "rejection_layer": "semantic",
+    "op": "replace",
+    "path": "/consistency/capture_finished_at",
+    "value": "2026-10-09T11:59:00Z",
+    "expected_error": "TIME_ORDER"
+  },
+  {
+    "name": "mixed_marker",
+    "document": "completion",
+    "rejection_layer": "semantic",
+    "op": "replace",
+    "path": "/backup_id",
+    "value": "20261009T120000Z-aaaaaaaa-2222-4333-8444-555555555555",
+    "expected_error": "MIXED_COMPLETION"
+  },
+  {
+    "name": "same_version_different_size",
+    "document": "inventory",
+    "rejection_layer": "semantic",
+    "op": "add",
+    "path": "/objects/-",
+    "value": {
+      "key": "urn:oid:fixture-1",
+      "version_id": "fixture-data-version-1",
+      "size_bytes": 257,
+      "etag": "fixture-etag-not-a-sha256",
+      "checksum": null
+    },
+    "expected_error": "DUPLICATE_OBJECT_KEY",
+    "additional_mutations": [
+      {
+        "op": "replace",
+        "path": "/object_count",
+        "value": 2
+      }
+    ]
+  },
+  {
+    "name": "newline_hash",
+    "document": "manifest",
+    "rejection_layer": "schema",
+    "op": "replace",
+    "path": "/artifacts/database/ciphertext_sha256",
+    "value": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff\n",
+    "expected_validator": "pattern"
+  },
+  {
+    "name": "newline_backup_id",
+    "document": "completion",
+    "rejection_layer": "schema",
+    "op": "replace",
+    "path": "/backup_id",
+    "value": "20261009T120000Z-11111111-2222-4333-8444-555555555555\n",
+    "expected_validator": "pattern"
+  },
+  {
+    "name": "whitespace_version",
+    "document": "manifest",
+    "rejection_layer": "schema",
+    "op": "replace",
+    "path": "/artifacts/configuration/version_id",
+    "value": " ",
+    "expected_validator": "pattern"
+  },
+  {
+    "name": "newline_version",
+    "document": "completion",
+    "rejection_layer": "schema",
+    "op": "replace",
+    "path": "/manifest_version_id",
+    "value": "fixture-version\n",
+    "expected_validator": "pattern"
+  },
+  {
+    "name": "null_report_version",
+    "document": "evidence",
+    "rejection_layer": "schema",
+    "op": "replace",
+    "path": "/report/version_id",
+    "value": "null",
+    "expected_validator": "pattern"
+  },
+  {
+    "name": "empty_data_version",
+    "document": "inventory",
+    "rejection_layer": "schema",
+    "op": "replace",
+    "path": "/objects/0/version_id",
+    "value": "",
+    "expected_validator": "minLength"
+  },
+  {
+    "name": "wrong_image_family",
+    "document": "manifest",
+    "rejection_layer": "schema",
+    "op": "replace",
+    "path": "/compatibility/nextcloud_image",
+    "value": "nextcloud:35.0.0-apache@sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "expected_validator": "pattern"
+  },
+  {
+    "name": "wrong_postgres_image",
+    "document": "manifest",
+    "rejection_layer": "schema",
+    "op": "replace",
+    "path": "/compatibility/postgres_image",
+    "value": "postgres:16.11-bookworm@sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+    "expected_validator": "pattern"
+  },
+  {
+    "name": "image_version_disagreement",
+    "document": "manifest",
+    "rejection_layer": "semantic",
+    "op": "replace",
+    "path": "/compatibility/nextcloud_version",
+    "value": "34.0.5",
+    "expected_error": "IMAGE_VERSION_MISMATCH"
+  },
+  {
+    "name": "impossible_backup_date",
+    "document": "manifest",
+    "rejection_layer": "semantic",
+    "op": "replace",
+    "path": "/backup_id",
+    "value": "20260230T120000Z-11111111-2222-4333-8444-555555555555",
+    "expected_error": "INVALID_BACKUP_TIMESTAMP"
+  },
+  {
+    "name": "completion_before_manifest",
+    "document": "completion",
+    "rejection_layer": "semantic",
+    "op": "replace",
+    "path": "/completed_at",
+    "value": "2026-10-09T12:04:59Z",
+    "expected_error": "TIME_ORDER"
+  },
+  {
+    "name": "restore_before_completion",
+    "document": "evidence",
+    "rejection_layer": "semantic",
+    "op": "replace",
+    "path": "/started_at",
+    "value": "2026-10-09T12:04:59Z",
+    "expected_error": "RESTORE_TIME_ORDER"
+  },
+  {
+    "name": "restore_finished_before_start",
+    "document": "evidence",
+    "rejection_layer": "semantic",
+    "op": "replace",
+    "path": "/finished_at",
+    "value": "2026-10-10T11:59:59Z",
+    "expected_error": "RESTORE_TIME_ORDER"
+  },
+  {
+    "name": "wrong_restore_source",
+    "document": "evidence",
+    "rejection_layer": "semantic",
+    "op": "replace",
+    "path": "/source/project",
+    "value": "other-project",
+    "expected_error": "UNBOUND_RESTORE_EVIDENCE"
+  },
+  {
+    "name": "wrong_report_prefix",
+    "document": "evidence",
+    "rejection_layer": "semantic",
+    "op": "replace",
+    "path": "/report/key",
+    "value": "evidence/other/restore-report.age",
+    "expected_error": "MIXED_RESTORE_REPORT"
+  },
+  {
+    "name": "inconsistent_recipient",
+    "document": "manifest",
+    "rejection_layer": "semantic",
+    "op": "replace",
+    "path": "/artifacts/configuration/encryption/recipient_id",
+    "value": "other-recipient",
+    "expected_error": "MIXED_ENCRYPTION_RECIPIENT"
+  },
+  {
+    "name": "malformed_base64",
+    "document": "inventory",
+    "rejection_layer": "schema",
+    "op": "replace",
+    "path": "/objects/0/checksum",
+    "value": {
+      "algorithm": "SHA256",
+      "value_base64": "A",
+      "type": "FULL_OBJECT"
+    },
+    "expected_validator": "oneOf"
+  },
+  {
+    "name": "wrong_digest_length",
+    "document": "inventory",
+    "rejection_layer": "semantic",
+    "op": "replace",
+    "path": "/objects/0/checksum",
+    "value": {
+      "algorithm": "SHA256",
+      "value_base64": "AAAAAA==",
+      "type": "FULL_OBJECT"
+    },
+    "expected_error": "INVALID_CHECKSUM_DESCRIPTOR"
+  },
+  {
+    "name": "composite_without_part_count",
+    "document": "inventory",
+    "rejection_layer": "schema",
+    "op": "replace",
+    "path": "/objects/0/checksum",
+    "value": {
+      "algorithm": "SHA256",
+      "value_base64": "AAAAAA==",
+      "type": "COMPOSITE"
+    },
+    "expected_validator": "oneOf"
+  },
+  {
+    "name": "crc64_composite",
+    "document": "inventory",
+    "rejection_layer": "schema",
+    "op": "replace",
+    "path": "/objects/0/checksum",
+    "value": {
+      "algorithm": "CRC64NVME",
+      "value_base64": "AAAAAAAAAAA=",
+      "type": "COMPOSITE",
+      "part_count": 2
+    },
+    "expected_validator": "oneOf"
+  }
+]

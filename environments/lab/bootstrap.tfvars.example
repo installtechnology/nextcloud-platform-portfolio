@@ -1,0 +1,16 @@
+aws_account_id = "REPLACE_WITH_ACCOUNT_ID"
+aws_region             = "REPLACE_WITH_AWS_REGION"
+project_name           = "nextcloud"
+environment            = "lab"
+backups_bucket_name = "replace-with-globally-unique-backups-bucket-name"
+github_oidc = {
+  owner = "REPLACE_OWNER"
+  repository = "REPLACE_REPOSITORY"
+  environment = "lab"
+  # owner_id = "REPLACE_NUMERIC_OWNER_ID"
+  # repository_id = "REPLACE_NUMERIC_REPOSITORY_ID"
+  # existing_provider_arn = "REPLACE_WITH_EXISTING_GITHUB_PROVIDER_ARN"
+}
+
+data_bucket_name = "replace-with-globally-unique-data-bucket-name"
+state_bucket_name = "replace-with-globally-unique-state-bucket-name"

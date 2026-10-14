@@ -1,0 +1,49 @@
+rule_files:
+  - ../prometheus/rules/alerts.yml
+evaluation_interval: 30s
+tests:
+  - name: Nextcloud indisponível dispara após dois minutos
+    interval: 30s
+    input_series:
+      - series: 'probe_success{job="nextcloud"}'
+        values: '0+0x8'
+    alert_rule_test:
+      - eval_time: 1m
+        alertname: NextcloudUnavailable
+        exp_alerts: []
+      - eval_time: 2m
+        alertname: NextcloudUnavailable
+        exp_alerts:
+          - exp_labels: {job: nextcloud, severity: critical}
+            exp_annotations:
+              summary: Nextcloud indisponível ou probe ausente
+              description: Verificar status.php, estado instalado, manutenção e coleta Alloy.
+  - name: Nextcloud disponível não dispara
+    interval: 30s
+    input_series:
+      - series: 'probe_success{job="nextcloud"}'
+        values: '1+0x8'
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: NextcloudUnavailable
+        exp_alerts: []
+  - name: Perda de telemetria também dispara
+    interval: 30s
+    input_series: []
+    alert_rule_test:
+      - eval_time: 2m
+        alertname: NextcloudUnavailable
+        exp_alerts:
+          - exp_labels: {job: nextcloud, severity: critical}
+            exp_annotations:
+              summary: Nextcloud indisponível ou probe ausente
+              description: Verificar status.php, estado instalado, manutenção e coleta Alloy.
+  - name: Recuperação remove alerta
+    interval: 30s
+    input_series:
+      - series: 'probe_success{job="nextcloud"}'
+        values: '0 0 0 0 0 1 1 1 1'
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: NextcloudUnavailable
+        exp_alerts: []

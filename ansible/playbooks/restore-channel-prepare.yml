@@ -1,0 +1,29 @@
+---
+# Explicit, separate administrative activation. Never included by deploy.yml.
+- name: Prepare dedicated restore SSH access on the verified replacement host
+  hosts: platform
+  become: true
+  gather_facts: true
+  pre_tasks:
+    - name: Require separately approved restore channel preparation
+      ansible.builtin.assert:
+        that:
+          - restore_channel_confirmation == 'PREPARE_RESTORE_CHANNEL'
+          - ansible_distribution == 'Ubuntu'
+          - ansible_distribution_version == '24.04'
+          - restore_access_configuration is mapping
+          - restore_channel_public_key is match('^ssh-ed25519 [A-Za-z0-9+/]+={0,2}( [^\r\n]+)?$')
+        quiet: true
+      no_log: true
+    - name: Verify previously installed host identity before modifying SSH access
+      ansible.builtin.command:
+        argv:
+          - /usr/local/lib/nextcloud-recovery/venv/bin/python
+          - -c
+          - "from scripts.restore.host_scope import load; from scripts.restore.access import validate_access; import json,sys; host=load(); validate_access(json.load(sys.stdin),host.config); print('RESTORE_CHANNEL_BINDING_VERIFIED')"
+        stdin: '{{ restore_access_configuration | to_json }}'
+        chdir: /usr/local/lib/nextcloud-recovery/repository
+      changed_when: false
+      no_log: true
+  roles:
+    - restore_channel

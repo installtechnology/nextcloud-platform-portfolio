@@ -1,0 +1,11 @@
+---
+- name: Preparar host Ubuntu e Docker
+  ansible.builtin.import_playbook: bootstrap.yml
+
+- name: Subir stack base Nextcloud
+  hosts: platform
+  become: true
+  gather_facts: true
+  roles:
+    - role: common
+    - role: nextcloud_stack

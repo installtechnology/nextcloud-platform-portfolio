@@ -1,0 +1,48 @@
+name: Backup platform (manual)
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Environment protegido; PR6 recusa qualquer operação real
+        type: string
+        required: true
+        default: lab
+      confirmation:
+        description: BACKUP confirma a intenção, mas não remove o bloqueio do PR6
+        type: string
+        required: true
+
+# No OIDC, secrets or operational actions until a separately reviewed activation.
+permissions:
+  contents: read
+
+jobs:
+  blocked-backup:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    environment: ${{ inputs.environment }}
+    concurrency:
+      group: aws-${{ vars.AWS_ACCOUNT_ID }}-${{ vars.PROJECT_NAME }}-${{ inputs.environment }}
+      cancel-in-progress: false
+    env:
+      BACKUP_ENVIRONMENT: ${{ inputs.environment }}
+      BACKUP_CONFIRMATION: ${{ inputs.confirmation }}
+      DEPLOY_BRANCH: ${{ vars.DEPLOY_BRANCH }}
+      AWS_ACCOUNT_ID: ${{ vars.AWS_ACCOUNT_ID }}
+      PROJECT_NAME: ${{ vars.PROJECT_NAME }}
+    steps:
+      - name: Validate literal manual main context before checkout
+        shell: bash
+        run: |
+          if [[ "$GITHUB_EVENT_NAME" != 'workflow_dispatch' || "$GITHUB_REF" != 'refs/heads/main' || "$BACKUP_CONFIRMATION" != 'BACKUP' ]]; then
+            printf '%s\n' '{"code":"DISPATCH_CONTEXT_REJECTED","operational_allowed":false,"backup_complete":false}'
+            exit 2
+          fi
+      - name: Checkout public source only
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ github.sha }}
+      - name: Refuse operational backup unconditionally
+        run: python3 -m scripts.backup.orchestration

@@ -1,0 +1,15 @@
+---
+common_operational_user: "{{ ansible_user | default('ubuntu') }}"
+common_platform_group: nextcloud-platform
+common_application_root: /opt/nextcloud-platform
+common_application_directories:
+  - docker
+  - monitoring
+  - data
+  - backups
+common_base_packages:
+  - ca-certificates
+  - curl
+  - python3-apt
+  - python3-debian
+common_apt_cache_valid_time: 3600

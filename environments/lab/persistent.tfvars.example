@@ -1,0 +1,8 @@
+aws_account_id = "REPLACE_WITH_ACCOUNT_ID"
+# Copie para persistent.tfvars (ignorado pelo Git) e substitua os placeholders.
+aws_region   = "REPLACE_WITH_AWS_REGION"
+project_name = "nextcloud"
+environment  = "lab"
+data_bucket_name  = "replace-with-globally-unique-data-bucket-name"
+backups_bucket_name  = "replace-with-globally-unique-backups-bucket-name"
+tags         = { Purpose = "portfolio" }

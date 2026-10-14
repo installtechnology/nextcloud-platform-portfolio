@@ -1,0 +1,35 @@
+groups:
+  - name: platform-lab
+    rules:
+      - alert: NextcloudUnavailable
+        expr: probe_success{job="nextcloud"} == 0 or absent(probe_success{job="nextcloud"})
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: Nextcloud indisponível ou probe ausente
+          description: Verificar status.php, estado instalado, manutenção e coleta Alloy.
+      - alert: RootDiskLow
+        expr: (node_filesystem_avail_bytes{job="host",mountpoint="/"} / node_filesystem_size_bytes{job="host",mountpoint="/"} < 0.10) and on(instance,device,mountpoint) (node_filesystem_readonly{job="host",mountpoint="/"} == 0)
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: Disco raiz abaixo de 10% livre
+          description: Conferir imagens, volumes, WAL e retenção antes de continuar a demonstração.
+      - alert: HostMemoryPressure
+        expr: node_memory_MemAvailable_bytes{job="host"} / node_memory_MemTotal_bytes{job="host"} < 0.10
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: Memória disponível abaixo de 10%
+          description: Medir a stack completa antes de ajustar capacidade.
+      - alert: AlloyUnavailable
+        expr: up{job="alloy"} == 0
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: Coletor Alloy indisponível
+          description: Probes e logs podem estar ausentes; verificar o coletor.

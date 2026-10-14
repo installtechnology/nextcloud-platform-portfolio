@@ -1,0 +1,12 @@
+aws_account_id = "REPLACE_WITH_ACCOUNT_ID"
+# Exemplos parametrizados; não aplicar sem editar e revisar o plano.
+aws_region             = "REPLACE_WITH_AWS_REGION"
+project_name           = "nextcloud"
+environment            = "lab"
+data_bucket_name = "replace-with-globally-unique-data-bucket-name"
+ssh_public_key         = "REPLACE_WITH_OPENSSH_PUBLIC_KEY"
+ssh_allowed_cidrs      = ["REPLACE_WITH_OPERATOR_IPV4/32"]
+http_allowed_cidrs     = ["REPLACE_WITH_DEMO_IPV4/32"]
+# instance_type pode ser definido pelo operador; omitido para herdar o default do root.
+# root_volume_size_gib omitido: herda o default; ajuste somente após medição.
+# ec2_permissions_boundary_arn = "REPLACE_WITH_BOOTSTRAP_OUTPUT"

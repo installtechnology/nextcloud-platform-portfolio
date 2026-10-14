@@ -1,0 +1,95 @@
+name: PR7 Linux qualification (offline manual)
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: VALIDATE_PR7_LINUX; synthetic local tests only
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  qualification:
+    if: github.ref == 'refs/heads/main' && inputs.confirmation == 'VALIDATE_PR7_LINUX'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    # No Environment, OIDC, Secrets, Docker, AWS, host connection or artifacts.
+    steps:
+      - name: Verify literal authorized manual context
+        env:
+          QUALIFICATION_CONFIRMATION: ${{ inputs.confirmation }}
+        run: |
+          set -euo pipefail
+          test "$GITHUB_EVENT_NAME" = workflow_dispatch
+          test "$GITHUB_REF" = refs/heads/main
+          test "$QUALIFICATION_CONFIRMATION" = VALIDATE_PR7_LINUX
+      - name: Checkout exact qualification source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+          ref: ${{ github.sha }}
+      - name: Verify environment and pinned wheels then install offline
+        run: |
+          set -euo pipefail
+          umask 077
+          unset PYTHONPATH PYTHONHOME
+          export PYTHONNOUSERSITE=1
+          /usr/bin/python3.12 -c 'from scripts.backup.orchestration.linux.prepare_posix import check_platform; check_platform()'
+          /usr/bin/python3.12 -I -m venv "$RUNNER_TEMP/pr7-bootstrap"
+          "$RUNNER_TEMP/pr7-bootstrap/bin/python" -m scripts.backup.operational.dependencies prepare-qualification "$RUNNER_TEMP/nextcloud-operational-qualification"
+      - name: Execute exactly three new Linux kernel tests with no skips
+        run: |
+          set -euo pipefail
+          unset PYTHONPATH PYTHONHOME
+          export PYTHONNOUSERSITE=1
+          # Store's existing operational guard requires UID 0. Only these three
+          # synthetic kernel tests run elevated, with an empty credential environment.
+          sudo -n install -d -m 0700 -- "$RUNNER_TEMP/pr7-root-home" "$RUNNER_TEMP/pr7-root-tmp"
+          sudo -n env -i PATH=/usr/bin:/bin LANG=C.UTF-8 PYTHONNOUSERSITE=1 \
+            HOME="$RUNNER_TEMP/pr7-root-home" TMPDIR="$RUNNER_TEMP/pr7-root-tmp" \
+            "$RUNNER_TEMP/nextcloud-operational-qualification/venv/bin/python" -m scripts.backup.qualification.pr7_linux
+      - name: Execute exactly five POSIX regressions with no skips
+        run: |
+          set -euo pipefail
+          unset PYTHONPATH PYTHONHOME
+          export PYTHONNOUSERSITE=1
+          "$RUNNER_TEMP/nextcloud-operational-qualification/venv/bin/python" -m scripts.backup.orchestration.posix_validation
+      - name: Syntax-check recovery preparation only using synthetic inventory
+        working-directory: ansible
+        run: |
+          set -euo pipefail
+          umask 077
+          unset PYTHONPATH PYTHONHOME
+          export PYTHONNOUSERSITE=1
+          printf '%s\n' 'platform:' '  hosts:' '    qualification_only:' '      ansible_connection: local' > "$RUNNER_TEMP/qualification-inventory.yml"
+          "$RUNNER_TEMP/nextcloud-operational-qualification/venv/bin/python" -m ansible.cli.playbook -i "$RUNNER_TEMP/qualification-inventory.yml" playbooks/recovery-prepare.yml --syntax-check
+          printf '%s\n' ANSIBLE_RECOVERY_SYNTAX_PASSED
+      - name: Qualify PR8 synthetic restore tests without host access
+        run: |
+          set -euo pipefail
+          unset PYTHONPATH PYTHONHOME
+          export PYTHONNOUSERSITE=1
+          # Required for synthetic config tests. Fail if absent; no install/fallback.
+          command -v php
+          php -r 'exit(PHP_VERSION_ID >= 80100 ? 0 : 1);'
+          php -l scripts/restore/remap-config.php
+          php -l scripts/restore/assert-restored.php
+          bash -n scripts/restore/restore-start.sh
+          # Three restore permission tests require real UID 0; all inputs are
+          # synthetic. Preserve the verified venv, remove credential environment.
+          sudo -n env -i PATH=/usr/bin:/bin LANG=C.UTF-8 PYTHONNOUSERSITE=1 \
+            HOME="$RUNNER_TEMP/pr7-root-home" TMPDIR="$RUNNER_TEMP/pr7-root-tmp" \
+            "$RUNNER_TEMP/nextcloud-operational-qualification/venv/bin/python" -m scripts.restore.qualification
+      - name: Syntax-check separate restore preparation without executing tasks
+        working-directory: ansible
+        run: |
+          set -euo pipefail
+          unset PYTHONPATH PYTHONHOME
+          export PYTHONNOUSERSITE=1
+          "$RUNNER_TEMP/nextcloud-operational-qualification/venv/bin/python" -m ansible.cli.playbook -i "$RUNNER_TEMP/qualification-inventory.yml" playbooks/restore-prepare.yml --syntax-check
+          "$RUNNER_TEMP/nextcloud-operational-qualification/venv/bin/python" -m ansible.cli.playbook -i "$RUNNER_TEMP/qualification-inventory.yml" playbooks/restore-channel-prepare.yml --syntax-check
+          "$RUNNER_TEMP/nextcloud-operational-qualification/venv/bin/python" -m ansible.cli.playbook -i "$RUNNER_TEMP/qualification-inventory.yml" playbooks/creation-handoff-prepare.yml --syntax-check
+          printf '%s\n' ANSIBLE_RESTORE_SYNTAX_PASSED

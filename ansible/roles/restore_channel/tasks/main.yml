@@ -1,0 +1,81 @@
+---
+- name: Install dedicated non-administrative restore SSH account
+  ansible.builtin.user:
+    name: ncrestore
+    system: true
+    create_home: true
+    shell: /bin/sh
+    password_lock: true
+
+- name: Protect account home against replacement of authorized keys
+  ansible.builtin.file:
+    path: /home/ncrestore
+    state: directory
+    owner: root
+    group: ncrestore
+    mode: '0750'
+
+- name: Prepare dedicated SSH directory
+  ansible.builtin.file:
+    path: /home/ncrestore/.ssh
+    state: directory
+    owner: root
+    group: ncrestore
+    mode: '0750'
+
+- name: Install only the explicitly reviewed restore public key with forced command
+  ansible.builtin.copy:
+    content: 'restrict,command="/usr/local/libexec/nextcloud-restore-ssh" {{ restore_channel_public_key }}'
+    dest: /home/ncrestore/.ssh/authorized_keys
+    owner: root
+    group: ncrestore
+    mode: '0640'
+  no_log: true
+
+- name: Prepare root-owned dispatcher directory on a clean destination
+  ansible.builtin.file:
+    path: /usr/local/libexec
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+
+- name: Install reviewed fixed dispatchers without altering backup dispatchers
+  ansible.builtin.copy:
+    src: /usr/local/lib/nextcloud-recovery/repository/scripts/restore/{{ item }}
+    remote_src: true
+    dest: /usr/local/libexec/{{ item }}
+    owner: root
+    group: root
+    mode: '0755'
+  loop:
+    - nextcloud-restore
+    - nextcloud-restore-ssh
+
+- name: Install narrowly scoped sudo permission after validating syntax
+  ansible.builtin.copy:
+    content: "Defaults:ncrestore env_reset\nncrestore ALL=(root) NOPASSWD: /usr/local/libexec/nextcloud-restore restore\n"
+    dest: /etc/sudoers.d/nextcloud-restore
+    owner: root
+    group: root
+    mode: '0440'
+    validate: /usr/sbin/visudo -cf %s
+
+- name: Install private administrative restore binding
+  ansible.builtin.copy:
+    content: '{{ restore_access_configuration | to_json }}'
+    dest: /etc/nextcloud-restore/access.json
+    owner: root
+    group: root
+    mode: '0600'
+  no_log: true
+
+- name: Validate installed configuration without opening sessions or running restore
+  ansible.builtin.command:
+    argv:
+      - /usr/local/lib/nextcloud-recovery/venv/bin/python
+      - -c
+      - "from scripts.restore.host_scope import load; from scripts.restore.access import load_access; h=load(); load_access(h.config); print('RESTORE_CHANNEL_CONFIG_VERIFIED')"
+    chdir: /usr/local/lib/nextcloud-recovery/repository
+  changed_when: false
+# No service activation, restart, Docker command, private key or AWS credential.

@@ -1,0 +1,48 @@
+name: Backup POSIX validation (isolated manual)
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: VALIDATE_POSIX; somente fixtures locais, sem AWS ou aplicação
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  posix:
+    if: github.ref == 'refs/heads/main' && inputs.confirmation == 'VALIDATE_POSIX'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    # No Environment, OIDC, secrets, AWS invocation, containers or artifacts.
+    steps:
+      - name: Validate literal manual main context before checkout
+        shell: bash
+        env:
+          POSIX_CONFIRMATION: ${{ inputs.confirmation }}
+        run: |
+          if [[ "$GITHUB_EVENT_NAME" != 'workflow_dispatch' || "$GITHUB_REF" != 'refs/heads/main' || "$POSIX_CONFIRMATION" != 'VALIDATE_POSIX' ]]; then
+            printf '%s\n' '{"code":"DISPATCH_CONTEXT_REJECTED","operationally_homologated":false}'
+            exit 2
+          fi
+      - name: Checkout public source only
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ github.sha }}
+      - name: Verify pinned wheels and prepare private offline venv
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          unset PYTHONPATH PYTHONHOME
+          /usr/bin/python3.12 -I scripts/backup/orchestration/linux/prepare_posix.py "$RUNNER_TEMP/nextcloud-posix-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+      - name: Run exactly five pending POSIX tests using private venv
+        shell: bash
+        run: |
+          set -euo pipefail
+          unset PYTHONPATH PYTHONHOME
+          export PYTHONNOUSERSITE=1
+          "$RUNNER_TEMP/nextcloud-posix-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT/venv/bin/python" -m scripts.backup.orchestration.posix_validation

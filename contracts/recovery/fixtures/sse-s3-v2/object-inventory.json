@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "backup_id": "20261009T120000Z-11111111-2222-4333-8444-555555555555",
+  "consistency_id": "capture-fixture",
+  "source": {
+    "account_id": "000000000000",
+    "project": "fixture-platform",
+    "environment": "fixture",
+    "installation_identity_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "data_bucket": "fixture-platform-data",
+    "region": "us-east-1"
+  },
+  "selection": "visible_current_objects_at_quiesced_capture",
+  "listing_complete": true,
+  "object_count": 1,
+  "objects": [
+    {
+      "key": "urn:oid:fixture-1",
+      "version_id": "fixture-data-version-1",
+      "size_bytes": 256,
+      "etag": "fixture-etag-not-a-sha256",
+      "checksum": null
+    }
+  ],
+  "absent_current_keys": [
+    "urn:oid:fixture-deleted"
+  ]
+}

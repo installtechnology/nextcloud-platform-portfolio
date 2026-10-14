@@ -1,0 +1,62 @@
+name: Backup platform (operational manual)
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Protected GitHub Environment
+        type: string
+        required: true
+        default: lab
+      confirmation:
+        description: BACKUP; requires separately authorized host/IAM activation
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  backup:
+    if: github.ref == 'refs/heads/main' && inputs.confirmation == 'BACKUP'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 50
+    environment: ${{ inputs.environment }}
+    permissions:
+      contents: read
+      id-token: write
+    concurrency:
+      group: aws-${{ vars.AWS_ACCOUNT_ID }}-${{ vars.PROJECT_NAME }}-${{ inputs.environment }}
+      cancel-in-progress: false
+    env:
+      AWS_EC2_METADATA_DISABLED: 'true'
+      AWS_ACCOUNT_ID: ${{ vars.AWS_ACCOUNT_ID }}
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      PROJECT_NAME: ${{ vars.PROJECT_NAME }}
+      DEPLOY_ENVIRONMENT: ${{ inputs.environment }}
+      DEPLOY_BRANCH: ${{ vars.DEPLOY_BRANCH }}
+      CONFIRMATION: ${{ inputs.confirmation }}
+      DATA_BUCKET_NAME: ${{ vars.DATA_BUCKET_NAME }}
+      BACKUPS_BUCKET_NAME: ${{ vars.BACKUPS_BUCKET_NAME }}
+      STATE_BUCKET_NAME: ${{ vars.STATE_BUCKET_NAME }}
+      BACKUP_ROLE_ARN: ${{ vars.BACKUP_ROLE_ARN }}
+      RECOVERY_INSTANCE_ID: ${{ vars.RECOVERY_INSTANCE_ID }}
+      RECOVERY_KNOWN_HOSTS: ${{ vars.RECOVERY_KNOWN_HOSTS }}
+    steps:
+      - name: Checkout exact authorized code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+          ref: ${{ github.sha }}
+      - name: Prepare reviewed wheels and private offline venv
+        run: /usr/bin/python3.12 -m scripts.backup.operational.dependencies prepare "$RUNNER_TEMP/nextcloud-operational"
+      - name: Prepare pinned portable official plugin (no installer)
+        env:
+          SSM_PLUGIN_PACKAGE_SHA256: ${{ vars.SSM_PLUGIN_PACKAGE_SHA256 }}
+        run: /usr/bin/python3.12 -m scripts.backup.operational.plugin
+      - name: Execute one guarded host operation over authenticated SSM SSH
+        env:
+          RECOVERY_SSH_PRIVATE_KEY: ${{ secrets.RECOVERY_SSH_PRIVATE_KEY }}
+        run: '"$RUNNER_TEMP/nextcloud-operational/venv/bin/python" -m scripts.backup.operational.runner backup'
+# No artifacts, plaintext downloads, administrative role or retry step.
+# PR6 backup.yml intentionally remains permanently non-operational.

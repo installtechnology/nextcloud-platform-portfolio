@@ -1,0 +1,137 @@
+{
+  "schema_version": 2,
+  "kind": "recovery-manifest",
+  "backup_id": "20261009T120000Z-11111111-2222-4333-8444-555555555555",
+  "status": "complete_integrity_verified",
+  "created_at": "2026-10-09T12:05:00Z",
+  "mode": "version_referenced_data_bucket",
+  "source": {
+    "account_id": "000000000000",
+    "project": "fixture-platform",
+    "environment": "fixture",
+    "installation_identity_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "data_bucket": "fixture-platform-data",
+    "region": "us-east-1"
+  },
+  "dependencies": {
+    "data_bucket_and_versions_required": true,
+    "protects_against_data_bucket_loss": false,
+    "secret_recovery_required": true,
+    "private_decryption_key_required": false
+  },
+  "compatibility": {
+    "repository_commit": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "nextcloud_version": "34.0.4",
+    "postgres_major": 17,
+    "nextcloud_image": "nextcloud:34.0.4-apache@sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "postgres_image": "postgres:17.11-bookworm@sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+    "database_name": "nextcloud",
+    "database_owner": "nextcloud",
+    "table_prefix": "oc_"
+  },
+  "consistency": {
+    "id": "capture-fixture",
+    "quiesced_at": "2026-10-09T12:00:00Z",
+    "capture_finished_at": "2026-10-09T12:02:00Z",
+    "application_writers_quiesced": true,
+    "background_writers_quiesced": true,
+    "inflight_requests_drained": true,
+    "inventory_before_sha256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "inventory_after_sha256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "maintenance_initially_enabled": false,
+    "original_service_state_restored": true
+  },
+  "scope": {
+    "postgres_application_database": true,
+    "database_roles_and_extensions_in_parameters": true,
+    "nextcloud_all_config_and_storage_marker": true,
+    "mutable_local_files_apps_themes": true,
+    "required_secret_values_sse_s3": true,
+    "observability_volumes_excluded": true,
+    "redis_cache_excluded": true
+  },
+  "artifacts": {
+    "database": {
+      "kind": "database",
+      "format": "pg-custom",
+      "backup_id": "20261009T120000Z-11111111-2222-4333-8444-555555555555",
+      "consistency_id": "capture-fixture",
+      "bucket": "fixture-platform-backups",
+      "key": "backups/20261009T120000Z-11111111-2222-4333-8444-555555555555/database.dump",
+      "version_id": "fixture-database-version",
+      "size_bytes": 1024,
+      "sha256": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "encryption": {
+        "method": "SSE-S3",
+        "algorithm": "AES256"
+      }
+    },
+    "configuration": {
+      "kind": "configuration",
+      "format": "tar",
+      "backup_id": "20261009T120000Z-11111111-2222-4333-8444-555555555555",
+      "consistency_id": "capture-fixture",
+      "bucket": "fixture-platform-backups",
+      "key": "backups/20261009T120000Z-11111111-2222-4333-8444-555555555555/configuration.tar",
+      "version_id": "fixture-configuration-version",
+      "size_bytes": 1024,
+      "sha256": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "encryption": {
+        "method": "SSE-S3",
+        "algorithm": "AES256"
+      }
+    },
+    "local_files": {
+      "kind": "local_files",
+      "format": "tar",
+      "backup_id": "20261009T120000Z-11111111-2222-4333-8444-555555555555",
+      "consistency_id": "capture-fixture",
+      "bucket": "fixture-platform-backups",
+      "key": "backups/20261009T120000Z-11111111-2222-4333-8444-555555555555/local_files.tar",
+      "version_id": "fixture-local_files-version",
+      "size_bytes": 1024,
+      "sha256": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "encryption": {
+        "method": "SSE-S3",
+        "algorithm": "AES256"
+      }
+    },
+    "recovery_parameters": {
+      "kind": "recovery_parameters",
+      "format": "json",
+      "backup_id": "20261009T120000Z-11111111-2222-4333-8444-555555555555",
+      "consistency_id": "capture-fixture",
+      "bucket": "fixture-platform-backups",
+      "key": "backups/20261009T120000Z-11111111-2222-4333-8444-555555555555/recovery_parameters.json",
+      "version_id": "fixture-recovery_parameters-version",
+      "size_bytes": 1024,
+      "sha256": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "encryption": {
+        "method": "SSE-S3",
+        "algorithm": "AES256"
+      }
+    },
+    "object_inventory": {
+      "kind": "object_inventory",
+      "format": "json",
+      "backup_id": "20261009T120000Z-11111111-2222-4333-8444-555555555555",
+      "consistency_id": "capture-fixture",
+      "bucket": "fixture-platform-backups",
+      "key": "backups/20261009T120000Z-11111111-2222-4333-8444-555555555555/object_inventory.json",
+      "version_id": "fixture-object_inventory-version",
+      "size_bytes": 1024,
+      "sha256": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "encryption": {
+        "method": "SSE-S3",
+        "algorithm": "AES256"
+      }
+    }
+  },
+  "verification": {
+    "dump_catalog_readable": true,
+    "artifact_checksums_verified_after_download": true,
+    "all_artifact_versions_available": true,
+    "all_referenced_data_versions_available_at_verification": true,
+    "restore_proven": false
+  }
+}

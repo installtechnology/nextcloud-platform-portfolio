@@ -1,0 +1,35 @@
+---
+# Separate administrative preparation; no application deployment or restoration.
+- name: Prepare a verified replacement EC2 for an authorized future restore
+  hosts: platform
+  become: true
+  gather_facts: true
+  pre_tasks:
+    - name: Require explicit target preparation and Ubuntu 24.04
+      ansible.builtin.assert:
+        that:
+          - restore_install_confirmation == 'PREPARE_RESTORE_TARGET'
+          - ansible_distribution == 'Ubuntu'
+          - ansible_distribution_version == '24.04'
+          - ansible_architecture == 'x86_64'
+          - restore_host_configuration is mapping
+          - restore_reviewed_code_export is defined
+          - restore_reviewed_wheelhouse is defined
+          - restore_reviewed_commit is match('^[0-9a-f]{40}$')
+        quiet: true
+      no_log: true
+
+    - name: Verify the guest identity before changing the destination
+      ansible.builtin.command:
+        argv:
+          - /usr/bin/python3
+          - -c
+          - "{{ lookup('ansible.builtin.file', playbook_dir + '/../../scripts/restore/prepare_identity.py') }}"
+        stdin: '{{ restore_host_configuration | to_json }}'
+      changed_when: false
+      no_log: true
+
+  roles:
+    - common
+    - docker
+    - restore_prepare

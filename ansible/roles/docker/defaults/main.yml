@@ -1,0 +1,23 @@
+---
+docker_allow_operational_user: false
+docker_operational_user: "{{ common_operational_user }}"
+docker_apt_repository_url: https://download.docker.com/linux/ubuntu
+docker_apt_key_url: https://download.docker.com/linux/ubuntu/gpg
+docker_apt_architectures:
+  x86_64: amd64
+  aarch64: arm64
+docker_packages:
+  - docker-ce
+  - docker-ce-cli
+  - containerd.io
+  - docker-buildx-plugin
+  - docker-compose-plugin
+docker_conflicting_packages:
+  - docker.io
+  - docker-compose
+  - docker-compose-v2
+  - docker-doc
+  - docker-buildx
+  - podman-docker
+  - containerd
+  - runc

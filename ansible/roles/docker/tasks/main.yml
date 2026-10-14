@@ -1,0 +1,89 @@
+---
+- name: Inspecionar pacotes já instalados
+  ansible.builtin.package_facts:
+    manager: apt
+
+- name: Abortar se existir instalação Docker conflitante
+  ansible.builtin.assert:
+    that:
+      - docker_conflicting_packages | intersect(ansible_facts['packages'].keys() | list) | length == 0
+    fail_msg: Host deve ser limpo. Resolver instalações conflitantes manualmente antes do bootstrap.
+
+- name: Preparar diretório de chaves APT
+  ansible.builtin.file:
+    path: /etc/apt/keyrings
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+
+- name: Baixar chave pública oficial Docker sem executar script remoto
+  ansible.builtin.get_url:
+    url: "{{ docker_apt_key_url }}"
+    dest: /etc/apt/keyrings/docker.asc
+    owner: root
+    group: root
+    mode: '0644'
+    force: false
+    validate_certs: true
+
+- name: Configurar repositório oficial Docker com chave restrita
+  ansible.builtin.deb822_repository:
+    name: docker
+    types: [deb]
+    uris: "{{ docker_apt_repository_url }}"
+    suites: "{{ ansible_facts['distribution_release'] }}"
+    components: [stable]
+    architectures: "{{ docker_apt_architectures[ansible_facts['architecture']] }}"
+    signed_by: /etc/apt/keyrings/docker.asc
+    state: present
+    enabled: true
+  register: docker_repository
+  when: not ansible_check_mode # python3-debian pode ainda não existir no primeiro dry-run.
+
+- name: Atualizar cache após alteração do repositório # noqa: no-handler
+  # O cache precisa estar pronto antes da instalação seguinte, não no fim do play.
+  ansible.builtin.apt:
+    update_cache: true
+    lock_timeout: 120
+  when: docker_repository is changed
+
+- name: Instalar Docker Engine e plugins modernos
+  ansible.builtin.apt:
+    name: "{{ docker_packages }}"
+    state: present
+    lock_timeout: 120
+  when: not ansible_check_mode # Repositório ainda pode não existir no primeiro dry-run.
+
+- name: Habilitar e iniciar o serviço Docker
+  ansible.builtin.systemd_service:
+    name: docker
+    enabled: true
+    state: started
+  when: not ansible_check_mode
+
+- name: Criar grupo Docker quando a adesão operacional for autorizada
+  ansible.builtin.group:
+    name: docker
+    state: present
+  when: docker_allow_operational_user | bool
+
+- name: Confirmar usuário existente antes de conceder acesso Docker
+  ansible.builtin.getent:
+    database: passwd
+    key: "{{ docker_operational_user }}"
+  when: docker_allow_operational_user | bool
+
+- name: Adicionar usuário operacional ao grupo Docker por opção explícita
+  ansible.builtin.user:
+    name: "{{ docker_operational_user }}"
+    groups: docker
+    append: true
+  when: docker_allow_operational_user | bool
+
+- name: Renovar conexão SSH para atualizar grupos da sessão
+  ansible.builtin.meta: reset_connection
+
+- name: Validar instalação e funcionamento
+  ansible.builtin.import_tasks: validate.yml
+  when: not ansible_check_mode

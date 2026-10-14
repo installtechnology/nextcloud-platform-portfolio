@@ -1,0 +1,74 @@
+---
+- name: Recusar preparação fora de Linux local e projeto explicitamente isolado
+  ansible.builtin.assert:
+    that:
+      - ansible_connection | default('local') == 'local'
+      - ansible_system == 'Linux'
+      - ansible_user_uid | int == 0
+      - recovery_capture_project is match('^nc-capture-test-[a-z0-9-]{1,40}$')
+      - recovery_capture_directory == '/opt/nextcloud-capture-sandbox'
+    fail_msg: PR3 prepara apenas ensaio Linux local isolado; integração operacional bloqueada.
+
+- name: Criar staging privado separado da aplicação
+  ansible.builtin.file:
+    path: "{{ recovery_capture_directory }}/{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: '0700'
+  loop:
+    - staging
+    - tooling
+    - tooling/repository/scripts/backup/capture
+    - tooling/repository/contracts/recovery/schemas
+    - tooling/repository/docker
+
+- name: Copiar somente fontes públicas necessárias sem caches ou configurações privadas
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/../../{{ item }}"
+    dest: "{{ recovery_capture_directory }}/tooling/repository/{{ item }}"
+    owner: root
+    group: root
+    mode: '0600'
+  loop:
+    - scripts/backup/__init__.py
+    - scripts/backup/__main__.py
+    - scripts/backup/errors.py
+    - scripts/backup/integrity.py
+    - scripts/backup/json_input.py
+    - scripts/backup/limits.py
+    - scripts/backup/requirements.txt
+    - scripts/backup/safe_files.py
+    - scripts/backup/schemas.py
+    - scripts/backup/semantics.py
+    - scripts/backup/validator.py
+    - scripts/backup/capture/__init__.py
+    - scripts/backup/capture/__main__.py
+    - scripts/backup/capture/archive.py
+    - scripts/backup/capture/control.py
+    - scripts/backup/capture/docker_backend.py
+    - scripts/backup/capture/engine.py
+    - scripts/backup/capture/process.py
+    - scripts/backup/capture/read-state.php
+    - scripts/backup/capture/storage.py
+    - contracts/recovery/schemas/manifest-v1.schema.json
+    - contracts/recovery/schemas/object-inventory-v1.schema.json
+    - contracts/recovery/schemas/completion-v1.schema.json
+    - contracts/recovery/schemas/restore-evidence-v1.schema.json
+    - docker/compose.yml
+
+- name: Preparar instruções locais sem executar captura ou instalar dependências
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/../../scripts/backup/capture/README.md"
+    dest: "{{ recovery_capture_directory }}/tooling/README.md"
+    owner: root
+    group: root
+    mode: '0600'
+
+- name: Preparar unidade de supervisão somente como arquivo inativo para revisão
+  ansible.builtin.template:
+    src: capture-sandbox.service.j2
+    dest: "{{ recovery_capture_directory }}/tooling/capture-sandbox.service"
+    owner: root
+    group: root
+    mode: '0600'

@@ -1,0 +1,9 @@
+---
+profile: safety
+# Segurança/idempotência para playbooks operacionais; produção/AAP não é o alvo.
+exclude_paths:
+  - .validation-tools/
+  - .validation-libs/
+  - ansible/tests/
+  - ansible/inventory/hosts.yml.example
+  - terraform/

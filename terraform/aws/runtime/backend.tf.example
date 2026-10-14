@@ -1,0 +1,4 @@
+# Copiar para backend.tf somente após bootstrap autorizado.
+terraform {
+  backend "s3" {}
+}

@@ -1,0 +1,26 @@
+---
+nextcloud_stack_directory: "{{ common_application_root }}/docker"
+nextcloud_stack_project: nextcloud-platform
+nextcloud_stack_postgres_db: nextcloud
+nextcloud_stack_postgres_user: nextcloud
+nextcloud_stack_admin_user: "{{ lookup('ansible.builtin.env', 'NEXTCLOUD_ADMIN_USER') }}"
+nextcloud_stack_trusted_domains: "{{ ansible_host }}"
+nextcloud_stack_bind_address: 0.0.0.0
+nextcloud_stack_http_port: 80
+nextcloud_stack_wait_timeout: 600
+nextcloud_stack_grafana_admin_user: "{{ lookup('ansible.builtin.env', 'GRAFANA_ADMIN_USER') }}"
+nextcloud_stack_grafana_admin_password: "{{ lookup('ansible.builtin.env', 'GRAFANA_ADMIN_PASSWORD') }}"
+nextcloud_stack_grafana_http_port: 3000
+nextcloud_stack_docker_log_directory: /var/lib/docker/containers
+nextcloud_stack_postgres_admin_password: "{{ lookup('ansible.builtin.env', 'POSTGRES_ADMIN_PASSWORD') }}"
+nextcloud_stack_postgres_password: "{{ lookup('ansible.builtin.env', 'POSTGRES_PASSWORD') }}"
+nextcloud_stack_admin_password: "{{ lookup('ansible.builtin.env', 'NEXTCLOUD_ADMIN_PASSWORD') }}"
+nextcloud_stack_redis_password: "{{ lookup('ansible.builtin.env', 'REDIS_PASSWORD') }}"
+nextcloud_stack_secrets:
+  - {name: grafana_admin_password, value: "{{ nextcloud_stack_grafana_admin_password }}"}
+  - {name: postgres_admin_password, value: "{{ nextcloud_stack_postgres_admin_password }}"}
+  - {name: postgres_password, value: "{{ nextcloud_stack_postgres_password }}"}
+  - {name: nextcloud_admin_password, value: "{{ nextcloud_stack_admin_password }}"}
+  - {name: redis_password, value: "{{ nextcloud_stack_redis_password }}"}
+nextcloud_stack_s3_bucket: "{{ lookup('ansible.builtin.env', 'NEXTCLOUD_S3_BUCKET') }}"
+nextcloud_stack_s3_region: "{{ lookup('ansible.builtin.env', 'NEXTCLOUD_S3_REGION') }}"
